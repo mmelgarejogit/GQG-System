@@ -147,14 +147,19 @@
   .cuota-tbl .h{background:var(--paper-2);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);padding:8px 14px}
   .cuota-tbl .r{padding:11px 14px;border-top:1px solid var(--line-soft)}
   .cuota-tbl .r b{color:var(--ink)}
-  .cuota-tbl .r{opacity:0;transform:translateX(12px)}
-  .active #s6.active .cuota-tbl .r{animation:slidein .5s ease forwards}
-  .active #s6.active .cuota-tbl .r:nth-child(2){animation-delay:.6s}
-  .active #s6.active .cuota-tbl .r:nth-child(3){animation-delay:.95s}
-  .active #s6.active .cuota-tbl .r:nth-child(4){animation-delay:1.3s}
-  @keyframes slidein{to{opacity:1;transform:none}}
-  .cuadre{margin-top:12px;display:inline-flex;gap:9px;align-items:center;font-family:var(--mono);font-size:12.5px;color:var(--green);background:#e7efe8;border:1px solid #bcd3c2;border-radius:5px;padding:8px 13px;opacity:0}
-  .active #s6.active .cuadre{animation:slidein .5s ease forwards 1.7s}
+  .cuota-tbl .r{animation:slidein .35s ease both}
+  @keyframes slidein{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+  .cuadre{margin-top:14px;display:inline-flex;gap:9px;align-items:center;font-family:var(--mono);font-size:12.5px;color:var(--green);background:#e7efe8;border:1px solid #bcd3c2;border-radius:5px;padding:8px 13px}
+  .cuadre.no{color:var(--gold);background:#f4ead6;border-color:#e2d0a6}
+  /* interactive controls (slide 6) */
+  .ctrl-lab{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);margin-bottom:6px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--paper-2)}
+  .seg button{flex:1;border:0;background:transparent;padding:9px 6px;font-family:var(--sans);font-weight:600;font-size:12px;color:var(--slate);cursor:pointer;transition:.2s}
+  .seg button.on{background:var(--ink);color:#fff}
+  .num-in{width:100%;border:1px solid var(--line);border-radius:6px;padding:9px 12px;font-family:var(--mono);font-size:18px;color:var(--ink);background:#fff;text-align:right}
+  .num-in:focus{outline:0;border-color:var(--accent)}
+  .src-meta{margin-top:14px;border-top:1px dashed var(--line-soft);padding-top:6px}
+  .cf-hint{margin-top:18px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--muted)}
 
   /* listas de pantallas / pruebas */
   .grid-list{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -170,6 +175,15 @@
   .member .rol{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
   .member .nm{font-weight:600;font-size:14px;margin-top:2px}
   .big-end{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5vw,58px);line-height:1;letter-spacing:-.02em}
+
+  /* presenter chip in footer */
+  .speaker{display:inline-flex;align-items:center;gap:8px;color:var(--ink);font-family:var(--sans);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:none}
+  .speaker::before{content:"";width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,var(--accent-soft),var(--gold));border:1px solid var(--line)}
+  .speaker small{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+  /* architecture node logos */
+  .node .logo{width:38px;height:38px;display:block;margin-bottom:6px}
+  .node.core .logo{filter:none}
 
   /* ---------- HUD: progress, dock, nav ---------- */
   .progress{position:fixed;top:0;left:0;height:3px;background:var(--gold);z-index:40;transition:width .45s cubic-bezier(.4,0,.2,1)}
@@ -224,7 +238,7 @@
         <div class="mark" data-rv style="--i:2">G<span>GQG · ABM</span></div>
       </div>
     </div>
-    <div class="s-foot"><span>gqg.ianmrc.dev — desplegado en producción</span><span>01 / 10</span></div>
+    <div class="s-foot"><span>gqg.ianmrc.dev — desplegado en producción</span><span class="speaker"><small>Presenta</small> Ian Delvalle</span><span>01 / 10</span></div>
   </section>
 
   <!-- 2 · PROBLEMA + MODALIDADES -->
@@ -252,7 +266,7 @@
         </div>
       </div>
     </div>
-    <div class="s-foot"><span>Tres modalidades · una solución parametrizable</span><span>02 / 10</span></div>
+    <div class="s-foot"><span>Tres modalidades · una solución parametrizable</span><span class="speaker"><small>Presenta</small> Ian Delvalle</span><span>02 / 10</span></div>
   </section>
 
   <!-- 3 · ARQUITECTURA -->
@@ -261,15 +275,25 @@
     <div class="s-body">
       <h2 class="s-title" data-rv style="--i:0;margin-bottom:26px">Del navegador <em>al trigger</em></h2>
       <div class="flow">
-        <div class="node" data-rv style="--i:1"><span class="lab">Cliente</span><span class="nm">Internet</span><span class="ds">Operador en el mostrador</span></div>
+        <div class="node" data-rv style="--i:1">
+          <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="#5b6679" stroke-width="1.4"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.2 3 3.2 15 0 18M12 3c-3.2 3-3.2 15 0 18"/></svg>
+          <span class="lab">Cliente</span><span class="nm">Internet</span><span class="ds">Operador en el mostrador</span></div>
         <div class="arrow" data-rv style="--i:2">→</div>
-        <div class="node" data-rv style="--i:2"><span class="lab">CDN · DNS</span><span class="nm">Cloudflare</span><span class="ds">*.ianmrc.dev · proxy</span></div>
+        <div class="node" data-rv style="--i:2">
+          <svg class="logo" viewBox="0 0 24 24"><path d="M8.6 17.5h8.1a2.7 2.7 0 0 0 .25-5.38 4.6 4.6 0 0 0-8.74-1.27A3.2 3.2 0 0 0 8.6 17.5z" fill="#f6821f"/><path d="M3.2 17.5h4.2" stroke="#fbad41" stroke-width="2.1" stroke-linecap="round"/></svg>
+          <span class="lab">CDN · DNS</span><span class="nm">Cloudflare</span><span class="ds">*.ianmrc.dev · proxy</span></div>
         <div class="arrow" data-rv style="--i:3">→</div>
-        <div class="node" data-rv style="--i:3"><span class="lab">Reverse proxy</span><span class="nm">nginx · OpenResty</span><span class="ds">TLS · único entrypoint</span></div>
+        <div class="node" data-rv style="--i:3">
+          <svg class="logo" viewBox="0 0 24 24"><path d="M12 2 21 7.2v9.6L12 22 3 16.8V7.2z" fill="#019639"/><path d="M9 16.5V9l6 7.2V9" stroke="#fff" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="lab">Reverse proxy</span><span class="nm">nginx · OpenResty</span><span class="ds">TLS · único entrypoint</span></div>
         <div class="arrow" data-rv style="--i:4">→</div>
-        <div class="node" data-rv style="--i:4"><span class="lab">App + API</span><span class="nm">Next.js 15</span><span class="ds">TypeScript · mysql2 · solo inserta y lee</span></div>
+        <div class="node" data-rv style="--i:4">
+          <svg class="logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#141b27"/><path d="M8.7 8v8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><path d="M8.7 8.2 16 17.4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><path d="M15.4 8v5.2" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span class="lab">App + API</span><span class="nm">Next.js 15</span><span class="ds">TypeScript · mysql2 · solo inserta y lee</span></div>
         <div class="arrow" data-rv style="--i:5">→</div>
-        <div class="node core" data-rv style="--i:5"><span class="lab">Datos + lógica</span><span class="nm">MariaDB 11</span><span class="ds">trigger ins_ventas · genera las cuotas</span></div>
+        <div class="node core" data-rv style="--i:5">
+          <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="#d7c9a7" stroke-width="1.4"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg>
+          <span class="lab">Datos + lógica</span><span class="nm">MariaDB 11</span><span class="ds">trigger ins_ventas · genera las cuotas</span></div>
       </div>
       <div class="arch-note" data-rv style="--i:6">
         <span style="font-family:var(--mono);color:var(--gold)">◆</span>
@@ -281,7 +305,7 @@
         </p>
       </div>
     </div>
-    <div class="s-foot"><span>net-public → net-app · contenedores aislados</span><span>03 / 10</span></div>
+    <div class="s-foot"><span>net-public → net-app · contenedores aislados</span><span class="speaker"><small>Presenta</small> Diego Duarte</span><span>03 / 10</span></div>
   </section>
 
   <!-- 4 · DER -->
@@ -383,7 +407,7 @@
         <span><i class="swatch" style="background:#fff;border:1px dashed #b08442"></i> relación polimórfica (tabla/tablaid)</span>
       </div>
     </div>
-    <div class="s-foot"><span>★ VENTAS.plazoid — agregado al script de cátedra · lo usa el trigger</span><span>04 / 10</span></div>
+    <div class="s-foot"><span>★ VENTAS.plazoid — agregado al script de cátedra · lo usa el trigger</span><span class="speaker"><small>Presenta</small> Alberto Malfitano</span><span>04 / 10</span></div>
   </section>
 
   <!-- 5 · TRIGGER -->
@@ -424,39 +448,45 @@
         </div>
       </div>
     </div>
-    <div class="s-foot"><span>Opción A — división simple, sin interés, cuotas parejas</span><span>05 / 10</span></div>
+    <div class="s-foot"><span>Opción A — división simple, sin interés, cuotas parejas</span><span class="speaker"><small>Presenta</small> Alberto Malfitano</span><span>05 / 10</span></div>
   </section>
 
   <!-- 6 · FLUJO DE CUOTAS -->
   <section class="slide" id="s6" data-sec="Generación de cuotas">
     <div class="s-head"><span class="kicker">Demo · el caso del cliente</span><span class="kicker">Cuadre exacto</span></div>
     <div class="s-body">
-      <h2 class="s-title" data-rv style="--i:0;margin-bottom:24px">Una venta entra, <em>tres cuotas</em> salen solas</h2>
-      <div class="cf">
+      <h2 class="s-title" data-rv style="--i:0;margin-bottom:6px">Una venta entra, <em>las cuotas</em> salen solas</h2>
+      <p class="cf-hint" data-rv style="--i:0">▸ Interactivo: cambiá la modalidad y el total — se recalcula con la misma lógica del trigger.</p>
+      <div class="cf" style="margin-top:16px">
         <div class="src" data-rv style="--i:1">
-          <div style="font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);margin-bottom:8px">INSERT INTO VENTAS</div>
-          <div class="row"><span>cliente</span><b>Gregorio Q. G.</b></div>
-          <div class="row"><span>tipo doc.</span><b>CR · Crédito</b></div>
-          <div class="row"><span>plazo</span><b>CR-30/45/60 (irregular)</b></div>
-          <div class="row"><span>moneda</span><b>Guaraní · 0 dec.</b></div>
-          <div class="row"><span>total factura</span><b>584.226</b></div>
+          <div class="ctrl-lab">MODALIDAD</div>
+          <div class="seg" id="segMod">
+            <button type="button" data-m="co">Contado</button>
+            <button type="button" data-m="reg">Regular</button>
+            <button type="button" data-m="irr" class="on">Irregular</button>
+          </div>
+          <div class="ctrl-lab" style="margin-top:14px">TOTAL FACTURA · GS</div>
+          <input id="inTotal" class="num-in" inputmode="numeric" value="584.226" aria-label="Total de la factura" />
+          <div class="src-meta">
+            <div class="row"><span>cliente</span><b>Gregorio Q. G.</b></div>
+            <div class="row"><span>plazo</span><b id="mPlazo">CR-30/45/60 (irregular)</b></div>
+            <div class="row"><span>moneda</span><b>Guaraní · 0 dec.</b></div>
+          </div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:8px" data-rv style="--i:2">
+        <div data-rv style="--i:2;display:flex;flex-direction:column;align-items:center;gap:8px">
           <div class="gear">⚙</div>
           <div style="font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--gold)">ins_ventas</div>
         </div>
         <div data-rv style="--i:2">
           <div class="cuota-tbl">
             <div class="h"><span>CUOTA</span><span>VENCE</span><span style="text-align:right">IMPORTE</span></div>
-            <div class="r"><b>01 / 03</b><span>+30 días</span><b style="text-align:right">194.742</b></div>
-            <div class="r"><b>02 / 03</b><span>+45 días</span><b style="text-align:right">194.742</b></div>
-            <div class="r"><b>03 / 03</b><span>+60 días</span><b style="text-align:right">194.742</b></div>
+            <div id="cuotaRows"></div>
           </div>
-          <div class="cuadre">✓ Σ cuotas = 584.226 — coincide con el total</div>
+          <div class="cuadre" id="cuadre">✓ Σ cuotas = 584.226 — coincide con el total</div>
         </div>
       </div>
     </div>
-    <div class="s-foot"><span>CUENTAS_COBRAR poblada por el trigger — el backend no calcula nada</span><span>06 / 10</span></div>
+    <div class="s-foot"><span>CUENTAS_COBRAR poblada por el trigger — el backend no calcula nada</span><span class="speaker"><small>Presenta</small> Alberto Malfitano</span><span>06 / 10</span></div>
   </section>
 
   <!-- 7 · ABMs + FACTURA -->
@@ -471,42 +501,29 @@
         <div class="li" data-rv style="--i:4"><span class="ic">PDF</span><div><b>Factura imprimible</b><p>Comprobante no fiscal con liquidación de IVA y el plan de cuotas. Cierra el flujo de la carga a la salida.</p></div></div>
       </div>
     </div>
-    <div class="s-foot"><span>Baja lógica · datos que se desactivan y reactivan</span><span>07 / 10</span></div>
+    <div class="s-foot"><span>Baja lógica · datos que se desactivan y reactivan</span><span class="speaker"><small>Presenta</small> Hugo Barrios</span><span>07 / 10</span></div>
   </section>
 
   <!-- 8 · VENTA / FRONTEND -->
   <section class="slide" id="s8" data-sec="Pantalla de venta">
     <div class="s-head"><span class="kicker">Frontend · diseño</span><span class="kicker">DESIGN.md</span></div>
     <div class="s-body">
-      <div class="cols c-2">
-        <div class="stack">
-          <h2 class="s-title" data-rv style="--i:0">Las cuotas, <em>antes</em> de confirmar</h2>
-          <p class="lead" data-rv style="--i:1">
-            Selector de cliente, fecha, productos y un toggle <b>Contado / Crédito</b> que
-            filtra los plazos válidos. Al elegir el plazo, las cuotas se previsualizan al
-            instante —numeradas 01/03, fechas DD/MM/AAAA— con un indicador de que la suma
-            <b>cuadra</b> con el total. Es el reflejo visual de lo que hace el trigger.
-          </p>
-          <p class="lead" data-rv style="--i:2;color:var(--slate);font-size:14px">
-            Control de secuencia: <b>CONFIRMAR VENTA</b> queda deshabilitado hasta generar
-            las cuotas. El total es derivado de las líneas, no se tipea a mano.
-          </p>
-        </div>
-        <div class="card" data-rv style="--i:2;background:var(--ink);color:var(--paper);border-color:var(--ink)">
-          <h3 style="color:#fff">Dirección de diseño</h3>
-          <p style="color:#b9c2d2">Sobria, para un operador que factura muchas horas.</p>
-          <div style="display:flex;gap:8px;margin:16px 0">
-            <i style="width:34px;height:34px;border-radius:5px;background:#141b27;border:1px solid #46506280" title="ink"></i>
-            <i style="width:34px;height:34px;border-radius:5px;background:#f4f1ec" title="paper"></i>
-            <i style="width:34px;height:34px;border-radius:5px;background:#d0e1fb" title="accent"></i>
-            <i style="width:34px;height:34px;border-radius:5px;background:#b08442" title="gold"></i>
-          </div>
-          <p style="font-family:var(--mono);font-size:12px;color:#cdab73">194.742 · 584.226</p>
-          <p style="color:#8ea0bd;font-size:12px;margin-top:4px">Importes en monoespaciada: las columnas de números alinean.</p>
-        </div>
+      <div class="stack" style="max-width:76ch">
+        <h2 class="s-title" data-rv style="--i:0">Las cuotas, <em>antes</em> de confirmar</h2>
+        <p class="lead" data-rv style="--i:1">
+          Selector de cliente, fecha, productos y un toggle <b>Contado / Crédito</b> que
+          filtra los plazos válidos. Al elegir el plazo, las cuotas se previsualizan al
+          instante —numeradas 01/03, fechas DD/MM/AAAA— con un indicador de que la suma
+          <b>cuadra</b> con el total. Es el reflejo visual de lo que hace el trigger.
+        </p>
+        <p class="lead" data-rv style="--i:2;color:var(--slate);font-size:14px">
+          Control de secuencia: <b>CONFIRMAR VENTA</b> queda deshabilitado hasta generar
+          las cuotas. El total es derivado de las líneas, no se tipea a mano. Importes en
+          tipografía monoespaciada para que las columnas de números alineen.
+        </p>
       </div>
     </div>
-    <div class="s-foot"><span>Paleta monocromática · tipografía tabular · responsive (tablet)</span><span>08 / 10</span></div>
+    <div class="s-foot"><span>Paleta monocromática · tipografía tabular · responsive (tablet)</span><span class="speaker"><small>Presenta</small> Matias Gaona</span><span>08 / 10</span></div>
   </section>
 
   <!-- 9 · PRUEBAS Y CALIDAD -->
@@ -523,7 +540,7 @@
         <div class="li" data-rv style="--i:6"><span class="ic">⌘</span><div><b>Calidad de código</b><p>ESLint + Prettier + Husky corren en cada commit (lint-staged).</p></div></div>
       </div>
     </div>
-    <div class="s-foot"><span>Un “no” honesto antes que un falso “sí”</span><span>09 / 10</span></div>
+    <div class="s-foot"><span>Un “no” honesto antes que un falso “sí”</span><span class="speaker"><small>Presenta</small> Matias Melgarejo</span><span>09 / 10</span></div>
   </section>
 
   <!-- 10 · CIERRE -->
@@ -543,14 +560,14 @@
         <div class="team" style="grid-template-columns:1fr" data-rv style="--i:2">
           <div class="member"><div class="rol">Jefe · Analista</div><div class="nm">Ian Delvalle</div></div>
           <div class="member"><div class="rol">BD · Trigger</div><div class="nm">Alberto Malfitano</div></div>
-          <div class="member"><div class="rol">ABMs · Factura</div><div class="nm">Hugo</div></div>
+          <div class="member"><div class="rol">ABMs · Factura</div><div class="nm">Hugo Barrios</div></div>
           <div class="member"><div class="rol">Backend · Infra</div><div class="nm">Diego Duarte</div></div>
           <div class="member"><div class="rol">Venta · Frontend</div><div class="nm">Matias Gaona</div></div>
           <div class="member"><div class="rol">Tester · Calidad</div><div class="nm">Matias Melgarejo</div></div>
         </div>
       </div>
     </div>
-    <div class="s-foot"><span>GQG System · Módulo de Crédito</span><span>10 / 10</span></div>
+    <div class="s-foot"><span>GQG System · Módulo de Crédito</span><span class="speaker"><small>Cierra</small> Ian Delvalle</span><span>10 / 10</span></div>
   </section>
 
 </div>
@@ -621,6 +638,54 @@
 
   const start=parseInt(location.hash.replace('#',''),10);
   go(Number.isFinite(start)&&start>0?start-1:0);
+})();
+
+// ---- Slide 6: simulador interactivo del trigger ----
+(function(){
+  const seg=document.getElementById('segMod');
+  const inTotal=document.getElementById('inTotal');
+  const rowsEl=document.getElementById('cuotaRows');
+  const cuadreEl=document.getElementById('cuadre');
+  const mPlazo=document.getElementById('mPlazo');
+  if(!seg||!inTotal||!rowsEl) return;
+  let mode='irr';
+  const fmt=n=>Math.round(n).toLocaleString('es-PY');
+  const base=new Date();
+  const addDays=d=>{const x=new Date(base);x.setDate(x.getDate()+d);
+    return String(x.getDate()).padStart(2,'0')+'/'+String(x.getMonth()+1).padStart(2,'0')+'/'+x.getFullYear();};
+  function compute(){
+    const total=parseInt(inTotal.value.replace(/\D/g,''),10)||0;
+    let rows=[], plazo='';
+    if(mode==='co'){ rows=[{n:1,c:1,d:0,imp:total}]; plazo='CO · contado'; }
+    else{
+      const n=3, dias = mode==='irr'?[30,45,60]:[30,60,90];
+      const cuota=Math.trunc(total/n), ultima=total-cuota*(n-1);
+      rows=[0,1,2].map(i=>({n:i+1,c:n,d:dias[i],imp:i<n-1?cuota:ultima}));
+      plazo = mode==='irr'?'CR-30/45/60 (irregular)':'CR-30/60/90 (regular)';
+    }
+    if(mPlazo) mPlazo.textContent=plazo;
+    rowsEl.innerHTML=rows.map(r=>{
+      const vence=r.d===0?'fecha factura':'+'+r.d+' d · '+addDays(r.d);
+      const lbl=String(r.n).padStart(2,'0')+' / '+String(r.c).padStart(2,'0');
+      return '<div class="r"><b>'+lbl+'</b><span>'+vence+'</span><b style="text-align:right">'+fmt(r.imp)+'</b></div>';
+    }).join('');
+    const suma=rows.reduce((s,r)=>s+r.imp,0);
+    const ok=total>0 && suma===total;
+    cuadreEl.className='cuadre'+(ok?'':' no');
+    cuadreEl.textContent=(ok?'✓ ':'• ')+'Σ cuotas = '+fmt(suma)+(ok?' — coincide con el total':' (cargá un total > 0)');
+  }
+  seg.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    mode=b.dataset.m;
+    [...seg.children].forEach(x=>x.classList.toggle('on',x===b));
+    compute();
+  });
+  inTotal.addEventListener('input',()=>{
+    const d=inTotal.value.replace(/\D/g,'');
+    inTotal.value=d?Number(d).toLocaleString('es-PY'):'';
+    compute();
+  });
+  compute();
 })();
 </script>
 </body>
