@@ -187,15 +187,14 @@
 
   /* ---------- HUD: progress, dock, nav ---------- */
   .progress{position:fixed;top:0;left:0;height:3px;background:var(--gold);z-index:40;transition:width .45s cubic-bezier(.4,0,.2,1)}
-  .dock{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:16px;
-        background:rgba(20,27,39,.92);color:#e9ecf2;border-radius:40px;padding:8px 16px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;backdrop-filter:blur(6px)}
-  .dock .dots{display:flex;gap:7px}
+  .dock{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:10px;
+        background:rgba(20,27,39,.92);color:#e9ecf2;border-radius:40px;padding:5px 10px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;backdrop-filter:blur(6px)}
+  .dock .dots{display:flex;gap:6px}
   .dot-nav{width:8px;height:8px;border-radius:50%;background:#46506280;border:1px solid #5a647a;cursor:pointer;padding:0;transition:.25s}
   .dot-nav.on{background:var(--gold);border-color:var(--gold);transform:scale(1.25)}
   .dock button.arr{background:none;border:0;color:#cfd6e2;cursor:pointer;font-family:var(--mono);font-size:15px;line-height:1;padding:2px 4px}
   .dock button.arr:hover{color:#fff}
-  .dock .cnt{min-width:46px;text-align:center;color:#aab3c2}
-  .dock .sec{color:#fff;max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dock .cnt{min-width:50px;text-align:center;color:#fff;font-weight:700}
   .edge{position:fixed;top:0;bottom:0;width:14vw;z-index:30;cursor:pointer;background:transparent}
   .edge.l{left:0}.edge.r{right:0}
   .hint{position:fixed;bottom:54px;left:50%;transform:translateX(-50%);z-index:35;font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;animation:fade 3.4s ease forwards 3s}
@@ -580,7 +579,6 @@
   <button class="arr" id="prev" aria-label="Anterior">◄</button>
   <span class="cnt" id="counter">01 / 10</span>
   <div class="dots" id="dots"></div>
-  <span class="sec" id="secName">Apertura</span>
   <button class="arr" id="next" aria-label="Siguiente">►</button>
 </div>
 
@@ -589,7 +587,6 @@
   const slides=[...document.querySelectorAll('.slide')];
   const dotsWrap=document.getElementById('dots');
   const counter=document.getElementById('counter');
-  const secName=document.getElementById('secName');
   const progress=document.getElementById('progress');
   let i=0;
   const pad=n=>String(n+1).padStart(2,'0');
@@ -606,7 +603,6 @@
     slides.forEach((s,idx)=>s.classList.toggle('active',idx===i));
     dots.forEach((d,idx)=>d.classList.toggle('on',idx===i));
     counter.textContent=pad(i)+' / '+pad(slides.length-1);
-    secName.textContent=slides[i].dataset.sec||'';
     progress.style.width=((i)/(slides.length-1)*100)+'%';
     location.hash=String(i+1);
   }
