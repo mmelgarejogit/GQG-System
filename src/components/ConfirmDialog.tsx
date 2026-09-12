@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import Icon from "@/components/Icon";
+import { Button, cx } from "@/components/ui";
 
 type Props = {
   open: boolean;
   title: string;
   message?: string;
-  icon?: string;
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
@@ -15,12 +16,10 @@ type Props = {
   onClose: () => void;
 };
 
-// Modal de confirmacion estandar del sistema (reemplaza window.confirm/alert).
 export default function ConfirmDialog({
   open,
   title,
   message,
-  icon,
   confirmLabel = "Confirmar",
   cancelLabel = "Cancelar",
   danger = false,
@@ -31,54 +30,57 @@ export default function ConfirmDialog({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !busy) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, busy, onClose]);
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 grid place-items-center bg-[rgba(27,27,29,0.32)] p-6"
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
+      onClick={() => !busy && onClose()}
     >
       <div
-        className="w-[26rem] max-w-[calc(100vw-2rem)] shrink-0 rounded-lg border border-outline bg-surface-lowest p-lg"
+        className="w-full max-w-[420px] rounded-md border border-line-strong bg-surface p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* cabecera: icono + accion */}
-        <div className="flex items-center gap-sm">
-          {icon && (
-            <span className={`material-symbols-outlined ${danger ? "text-error" : "text-primary"}`}>
-              {icon}
-            </span>
-          )}
-          <h3 className="font-headline-sm text-headline-sm text-primary">{title}</h3>
-        </div>
-
-        {message && <p className="mt-sm font-body-sm text-body-sm text-secondary">{message}</p>}
-
-        <div className="mt-lg flex justify-end gap-md">
-          <button
-            onClick={onClose}
-            disabled={busy}
-            className="h-10 rounded border border-outline-variant px-xl font-label-caps text-label-caps text-primary transition-colors hover:bg-surface-container disabled:opacity-50"
+        <div className="mb-4 flex items-start gap-3">
+          <div
+            className={cx(
+              "grid h-8 w-8 flex-none place-items-center rounded-md",
+              danger ? "bg-error-soft" : "bg-accent-soft",
+            )}
           >
+            <Icon
+              name={danger ? "advertencia" : "check"}
+              size={18}
+              stroke={1.8}
+              color={danger ? "#BA1A1A" : "#182232"}
+            />
+          </div>
+          <div>
+            <div className="mb-1 text-base font-semibold">{title}</div>
+            {message && (
+              <div className="text-[13px] leading-5 text-muted">{message}</div>
+            )}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button onClick={onClose} disabled={busy}>
             {cancelLabel}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={danger ? "danger" : "primary"}
             onClick={onConfirm}
             disabled={busy}
-            className={`h-10 rounded px-xl font-label-caps text-label-caps font-bold text-white transition-all disabled:opacity-50 ${
-              danger ? "bg-error hover:opacity-90" : "bg-primary hover:bg-primary-container"
-            }`}
           >
             {busy ? "..." : confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

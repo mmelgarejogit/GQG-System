@@ -1,16 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ConfirmDialog from "@/components/ConfirmDialog";
-
-type Confirmacion = {
-  title: string;
-  message: string;
-  label: string;
-  icon: string;
-  danger: boolean;
-  run: () => Promise<void>;
-};
+import {
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  ErrorBox,
+  IconButton,
+  Label,
+  SearchInput,
+  SectionLabel,
+  cx,
+  inputCls,
+  monoInputCls,
+  tdCls,
+  thCls,
+} from "@/components/ui";
 
 type Cliente = {
   id: number;
@@ -31,23 +38,51 @@ const VACIO = {
   email: "",
   telefono: "",
 };
+type Form = typeof VACIO;
+
+const CAMPOS: [keyof Form, string, boolean][] = [
+  ["nombres", "NOMBRES", false],
+  ["apellidos", "APELLIDOS", false],
+  ["documentonro", "CI / RUC", true],
+  ["telefono", "TELÉFONO", true],
+  ["direccion", "DIRECCIÓN", false],
+  ["email", "EMAIL", false],
+];
 
 export default function ClientesPage() {
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [f, setF] = useState(VACIO);
+  const [clientes, setClientes] = useState<Cliente[] | null>(null);
+  const [q, setQ] = useState("");
+  const [abierto, setAbierto] = useState(false);
+  const [f, setF] = useState<Form>(VACIO);
   const [editId, setEditId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
+  const [confirmar, setConfirmar] = useState<Cliente | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
   function cargar() {
-    void fetch("/api/clientes?inactivos=1").then((r) => r.json()).then(setClientes);
+    fetch("/api/clientes?inactivos=1")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(setClientes)
+      .catch(() => setError("No se pudieron cargar los clientes."));
   }
   useEffect(cargar, []);
 
-  function set(k: keyof typeof f, v: string) {
-    setF((x) => ({ ...x, [k]: v }));
+  const filtrados = useMemo(() => {
+    const qn = q.trim().toLowerCase();
+    return (clientes ?? []).filter(
+      (c) =>
+        !qn ||
+        `${c.nombres} ${c.apellidos}`.toLowerCase().includes(qn) ||
+        (c.documentonro || "").toLowerCase().includes(qn),
+    );
+  }, [clientes, q]);
+
+  function nuevo() {
+    setEditId(null);
+    setF(VACIO);
+    setError(null);
+    setAbierto(true);
   }
 
   function editar(c: Cliente) {
@@ -61,228 +96,228 @@ export default function ClientesPage() {
       email: c.email || "",
       telefono: c.telefono || "",
     });
+    setAbierto(true);
   }
 
-  function cancelar() {
+  function cerrar() {
+    setAbierto(false);
     setEditId(null);
     setF(VACIO);
     setError(null);
   }
 
   async function guardar() {
-    if (!f.nombres.trim()) return setError("El nombre es obligatorio");
+    if (!f.nombres.trim()) return setError("El nombre es obligatorio.");
     setBusy(true);
     setError(null);
-    const r = await fetch(editId ? `/api/clientes/${editId}` : "/api/clientes", {
-      method: editId ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(f),
-    });
+    const r = await fetch(
+      editId ? `/api/clientes/${editId}` : "/api/clientes",
+      {
+        method: editId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(f),
+      },
+    );
+    setBusy(false);
     if (r.ok) {
-      cancelar();
+      cerrar();
       cargar();
     } else {
       const d = await r.json().catch(() => ({}));
-      setError(d.error || "No se pudo guardar el cliente");
+      setError(d.error || "No se pudo guardar el cliente.");
     }
-    setBusy(false);
   }
 
-  function pedirDesactivar(c: Cliente) {
-    setConfirmacion({
-      title: "Desactivar cliente",
-      message: `${c.nombres} ${c.apellidos} no aparecera en nuevas ventas. Podes reactivarlo despues.`,
-      label: "Desactivar",
-      icon: "block",
-      danger: true,
-      run: async () => {
-        const r = await fetch(`/api/clientes/${c.id}`, { method: "DELETE" });
-        if (r.ok) {
-          if (editId === c.id) cancelar();
-          cargar();
-        } else {
-          const d = await r.json().catch(() => ({}));
-          setError(d.error || "No se pudo desactivar el cliente");
-        }
-      },
-    });
-  }
-
-  function pedirReactivar(c: Cliente) {
-    setConfirmacion({
-      title: "Reactivar cliente",
-      message: `${c.nombres} ${c.apellidos} volvera a estar disponible en las ventas.`,
-      label: "Reactivar",
-      icon: "check_circle",
-      danger: false,
-      run: async () => {
-        const r = await fetch(`/api/clientes/${c.id}`, { method: "PATCH" });
-        if (r.ok) cargar();
-        else {
-          const d = await r.json().catch(() => ({}));
-          setError(d.error || "No se pudo reactivar el cliente");
-        }
-      },
-    });
-  }
-
-  async function ejecutarConfirmacion() {
-    if (!confirmacion) return;
+  async function cambiarEstado() {
+    if (!confirmar) return;
     setConfirmBusy(true);
-    await confirmacion.run();
+    const r = await fetch(`/api/clientes/${confirmar.id}`, {
+      method: confirmar.activo ? "DELETE" : "PATCH",
+    });
     setConfirmBusy(false);
-    setConfirmacion(null);
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      setError(d.error || "No se pudo actualizar el cliente.");
+    } else if (editId === confirmar.id) cerrar();
+    setConfirmar(null);
+    cargar();
   }
-
-  const inputCls =
-    "h-10 w-full rounded border border-outline-variant bg-transparent px-md font-body-md text-body-md text-primary outline-none focus:border-primary";
 
   return (
-    <div>
-      <div className="mx-auto grid max-w-[1100px] grid-cols-12 gap-xl">
-        {/* listado */}
-        <div className="col-span-12 lg:col-span-7">
-          <section className="overflow-hidden rounded-lg border border-outline-variant bg-surface-lowest">
-            <div className="flex items-center gap-xs border-b border-outline-variant p-lg">
-              <span className="material-symbols-outlined text-primary">group</span>
-              <h2 className="font-headline-sm text-headline-sm text-primary">Clientes</h2>
-            </div>
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="bg-surface-container">
-                  <th className="px-md py-sm font-label-caps text-label-caps text-secondary">NOMBRE</th>
-                  <th className="px-md py-sm font-label-caps text-label-caps text-secondary">DOCUMENTO</th>
-                  <th className="px-md py-sm font-label-caps text-label-caps text-secondary">TELEFONO</th>
-                  <th className="px-md py-sm text-right font-label-caps text-label-caps text-secondary">ACCIONES</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clientes.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-md py-lg font-body-sm text-body-sm text-secondary">
-                      No hay clientes todavia.
-                    </td>
-                  </tr>
-                ) : (
-                  clientes.map((c) => {
-                    const inactivo = c.activo === 0;
-                    return (
-                      <tr
-                        key={c.id}
-                        className={`border-b border-outline-variant ${
-                          editId === c.id ? "bg-secondary-container/40" : inactivo ? "opacity-55" : ""
-                        }`}
-                      >
-                        <td className="px-md py-md font-body-md text-body-md text-primary">
-                          <span className="flex items-center gap-xs">
-                            {c.nombres} {c.apellidos}
-                            {inactivo && (
-                              <span className="rounded bg-surface-container px-1.5 py-0.5 font-label-caps text-label-caps text-secondary">
-                                INACTIVO
-                              </span>
-                            )}
-                          </span>
-                        </td>
-                        <td className="px-md py-md font-tabular-num text-tabular-num text-secondary">
-                          {c.documentonro || "-"}
-                        </td>
-                        <td className="px-md py-md font-body-md text-body-md text-secondary">
-                          {c.telefono || "-"}
-                        </td>
-                        <td className="px-md py-md">
-                          <div className="flex justify-end gap-xs">
-                            {inactivo ? (
-                              <button
-                                onClick={() => pedirReactivar(c)}
-                                title="Activar"
-                                className="flex items-center justify-center rounded p-1 text-secondary transition-colors hover:bg-surface-container-high hover:text-ok"
-                              >
-                                <span className="material-symbols-outlined text-base">check_circle</span>
-                              </button>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => editar(c)}
-                                  title="Editar"
-                                  className="flex items-center justify-center rounded p-1 text-secondary transition-colors hover:bg-surface-container-high hover:text-primary"
-                                >
-                                  <span className="material-symbols-outlined text-base">edit</span>
-                                </button>
-                                <button
-                                  onClick={() => pedirDesactivar(c)}
-                                  title="Desactivar"
-                                  className="flex items-center justify-center rounded p-1 text-secondary transition-colors hover:bg-surface-container-high hover:text-error"
-                                >
-                                  <span className="material-symbols-outlined text-base">block</span>
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </section>
-        </div>
-
-        {/* alta / edicion */}
-        <div className="col-span-12 lg:col-span-5">
-          <section className="rounded-lg border border-outline-variant bg-surface-lowest p-lg">
-            <div className="mb-lg font-headline-sm text-headline-sm text-primary">
-              {editId ? "Editar cliente" : "Nuevo cliente"}
-            </div>
-            <div className="space-y-md">
-              {(
-                [
-                  ["nombres", "NOMBRES"],
-                  ["apellidos", "APELLIDOS"],
-                  ["documentonro", "DOCUMENTO (CI / RUC)"],
-                  ["direccion", "DIRECCION"],
-                  ["email", "EMAIL"],
-                  ["telefono", "TELEFONO"],
-                ] as [keyof typeof f, string][]
-              ).map(([k, label]) => (
-                <div key={k} className="flex flex-col gap-xs">
-                  <label className="font-label-caps text-label-caps text-secondary">{label}</label>
-                  <input className={inputCls} value={f[k]} onChange={(e) => set(k, e.target.value)} />
-                </div>
-              ))}
-            </div>
-            {error && <p className="mt-md font-body-sm text-body-sm text-error">{error}</p>}
-            <div className="mt-lg flex gap-md">
-              {editId && (
-                <button
-                  onClick={cancelar}
-                  className="h-10 rounded border border-outline-variant px-xl font-label-caps text-label-caps text-primary transition-colors hover:bg-surface-container"
-                >
-                  CANCELAR
-                </button>
-              )}
-              <button
-                onClick={guardar}
-                disabled={busy || !f.nombres.trim()}
-                className="h-10 flex-1 rounded bg-primary px-xl font-label-caps text-label-caps font-bold text-on-primary transition-colors hover:bg-primary-container disabled:opacity-50"
-              >
-                {busy ? "GUARDANDO..." : editId ? "GUARDAR CAMBIOS" : "CREAR CLIENTE"}
-              </button>
-            </div>
-          </section>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchInput
+          value={q}
+          onChange={setQ}
+          placeholder="Buscar cliente o CI/RUC"
+        />
+        <div className="flex-1" />
+        <Button variant="primary" onClick={nuevo}>
+          Nuevo cliente
+        </Button>
       </div>
 
+      {error && !abierto && <ErrorBox>{error}</ErrorBox>}
+
+      {abierto && (
+        <Card className="p-4">
+          <div className="mb-4 flex items-center">
+            <SectionLabel>
+              {editId ? "EDITAR CLIENTE" : "NUEVO CLIENTE"}
+            </SectionLabel>
+            <div className="flex-1" />
+            <button
+              onClick={cerrar}
+              className="cursor-pointer text-xs text-subtle underline"
+            >
+              Cancelar
+            </button>
+          </div>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+            {CAMPOS.map(([k, label, mono]) => (
+              <div key={k}>
+                <Label>{label}</Label>
+                <input
+                  className={mono ? monoInputCls : inputCls}
+                  value={f[k]}
+                  onChange={(e) => setF({ ...f, [k]: e.target.value })}
+                />
+              </div>
+            ))}
+          </div>
+          {error && (
+            <div className="mt-4">
+              <ErrorBox>{error}</ErrorBox>
+            </div>
+          )}
+          <div className="mt-4 flex gap-2">
+            <Button variant="primary" onClick={guardar} disabled={busy}>
+              {busy
+                ? "Guardando..."
+                : editId
+                  ? "Guardar cambios"
+                  : "Crear cliente"}
+            </Button>
+            <Button onClick={cerrar}>Descartar</Button>
+          </div>
+        </Card>
+      )}
+
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-head">
+                <th className={cx(thCls, "pl-4")}>NOMBRES Y APELLIDOS</th>
+                <th className={thCls}>CI / RUC</th>
+                <th className={thCls}>DIRECCIÓN</th>
+                <th className={thCls}>TELÉFONO</th>
+                <th className={thCls}>EMAIL</th>
+                <th className={thCls}>ESTADO</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.map((c) => {
+                const activo = c.activo === 1;
+                return (
+                  <tr
+                    key={c.id}
+                    className={cx(
+                      "border-b border-line hover:bg-hover",
+                      editId === c.id && "bg-accent-soft",
+                    )}
+                  >
+                    <td className={cx(tdCls, "pl-4 font-medium")}>
+                      {c.nombres} {c.apellidos}
+                    </td>
+                    <td className={cx(tdCls, "font-mono text-muted")}>
+                      {c.documentonro || "—"}
+                    </td>
+                    <td className={cx(tdCls, "text-muted")}>
+                      {c.direccion || "—"}
+                    </td>
+                    <td
+                      className={cx(
+                        tdCls,
+                        "font-mono whitespace-nowrap text-muted",
+                      )}
+                    >
+                      {c.telefono || "—"}
+                    </td>
+                    <td className={cx(tdCls, "text-muted")}>
+                      {c.email || "—"}
+                    </td>
+                    <td className={tdCls}>
+                      <Chip tono={activo ? "ok" : "neutro"}>
+                        {activo ? "Activo" : "Inactivo"}
+                      </Chip>
+                    </td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      {activo ? (
+                        <>
+                          <IconButton
+                            icon="editar"
+                            title="Editar"
+                            aria-label="Editar"
+                            onClick={() => editar(c)}
+                            className="mr-1"
+                          />
+                          <IconButton
+                            icon="bloquear"
+                            danger
+                            title="Desactivar"
+                            aria-label="Desactivar"
+                            onClick={() => setConfirmar(c)}
+                          />
+                        </>
+                      ) : (
+                        <IconButton
+                          icon="check"
+                          title="Reactivar"
+                          aria-label="Reactivar"
+                          onClick={() => setConfirmar(c)}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {clientes !== null && filtrados.length === 0 && (
+          <EmptyState
+            icon="clientes"
+            titulo={
+              clientes.length
+                ? "Ningún cliente coincide"
+                : "Todavía no hay clientes"
+            }
+            texto={
+              clientes.length
+                ? "Probá con otro nombre o número de documento."
+                : "Cargá el primero con «Nuevo cliente»."
+            }
+          />
+        )}
+      </Card>
+
       <ConfirmDialog
-        open={confirmacion !== null}
-        title={confirmacion?.title ?? ""}
-        message={confirmacion?.message}
-        icon={confirmacion?.icon}
-        confirmLabel={confirmacion?.label}
-        danger={confirmacion?.danger}
+        open={confirmar !== null}
+        title={confirmar?.activo ? "Desactivar cliente" : "Reactivar cliente"}
+        message={
+          confirmar
+            ? confirmar.activo
+              ? `«${confirmar.nombres} ${confirmar.apellidos}» dejará de aparecer en nuevas ventas. Las facturas emitidas conservan sus datos.`
+              : `«${confirmar.nombres} ${confirmar.apellidos}» volverá a estar disponible en las ventas.`
+            : undefined
+        }
+        confirmLabel={confirmar?.activo ? "Desactivar" : "Reactivar"}
+        danger={confirmar?.activo === 1}
         busy={confirmBusy}
-        onConfirm={ejecutarConfirmacion}
-        onClose={() => setConfirmacion(null)}
+        onConfirm={cambiarEstado}
+        onClose={() => setConfirmar(null)}
       />
     </div>
   );

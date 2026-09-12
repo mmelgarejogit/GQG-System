@@ -1,23 +1,17 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
-import { fechaCorta, cuotaLabel, gs } from "@/lib/format";
+import { useRouter } from "next/navigation";
+import { Button, ErrorBox } from "@/components/ui";
+import {
+  cuotaLabel,
+  fechaCorta,
+  gs,
+  nroFactura,
+  numeroALetras,
+} from "@/lib/format";
+import { liquidacionIva, type VentaDetalle } from "@/lib/venta";
 
-type Cuota = { cuota: number; importe: number; cobrado: number; vence: string };
-type Linea = { producto: string; precio: number; cantidad: number; iva: number; total: number };
-type Detalle = {
-  serie: string;
-  nrofactura: number;
-  fechafactura: string;
-  totalfactura: number;
-  cliente: string;
-  documentonro: string;
-  tipo: string;
-  plazo: string;
-  cuotas: Cuota[];
-  lineas: Linea[];
-};
 type Empresa = {
   empresa: string;
   direccion: string;
@@ -26,193 +20,251 @@ type Empresa = {
   ruc: string;
 };
 
-export default function FacturaPage({ params }: { params: Promise<{ id: string }> }) {
+const th =
+  "px-1 py-1.5 text-[10px] font-semibold tracking-[0.05em] border-b border-ink";
+const td = "px-1 py-[5px] font-mono text-[11px] border-b border-[#EFEFEF]";
+
+export default function FacturaPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
-  const [d, setD] = useState<Detalle | null>(null);
+  const router = useRouter();
+  const [d, setD] = useState<VentaDetalle | null>(null);
   const [emp, setEmp] = useState<Empresa | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    void fetch(`/api/ventas/${id}`).then((r) => r.json()).then(setD);
-    void fetch("/api/empresa").then((r) => r.json()).then(setEmp);
+    fetch(`/api/ventas/${id}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(setD)
+      .catch(() => setError(true));
+    void fetch("/api/empresa")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setEmp);
   }, [id]);
 
-  if (!d) return null;
+  if (error) return <ErrorBox>No se pudo cargar la factura.</ErrorBox>;
+  if (!d)
+    return (
+      <div className="animate-gqgpulse mx-auto h-[600px] w-full max-w-[794px] border border-line bg-surface" />
+    );
 
-  // liquidacion de IVA (precios con IVA incluido, criterio PY)
-  const exentas = d.lineas.filter((l) => l.iva === 0).reduce((s, l) => s + l.total, 0);
-  const grav10 = d.lineas.filter((l) => l.iva === 10).reduce((s, l) => s + l.total, 0);
-  const grav5 = d.lineas.filter((l) => l.iva === 5).reduce((s, l) => s + l.total, 0);
-  const iva10 = grav10 - grav10 / 1.1;
-  const iva5 = grav5 - grav5 / 1.05;
-  const totalIva = iva5 + iva10;
-
-  const cred = d.tipo !== "Contado" && d.tipo !== "CO";
-  const cantItems = d.lineas.reduce((s, l) => s + Number(l.cantidad), 0);
-  const totalCuotas = d.cuotas.reduce((s, c) => s + Number(c.importe), 0);
+  const credito = d.tipoid === 1;
+  const iva = liquidacionIva(d.lineas);
+  const letras = numeroALetras(d.totalfactura);
 
   return (
-    <div>
-      {/* impresion limpia: ocultar nav del sistema, conservar colores */}
-      <style>{`
-        @media print {
-          body { background: #fff; }
-          .no-print, aside, header { display: none !important; }
-          .factura-doc { border: none !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; }
-          @page { size: A4; margin: 14mm; }
-        }
-        .factura-doc, .factura-doc * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      `}</style>
-      <div className="no-print" style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <Link href={`/ventas/${id}`} className="btn btn-ghost" style={{ textDecoration: "none" }}>
-          ← Volver
-        </Link>
-        <button className="btn btn-primary" onClick={() => window.print()}>
+    <div className="flex flex-col items-center gap-4">
+      <div data-noprint className="flex w-full max-w-[794px] gap-2">
+        <Button size="sm" onClick={() => router.push(`/ventas/${id}`)}>
+          ‹ Volver al detalle
+        </Button>
+        <div className="flex-1" />
+        <Button size="sm" variant="primary" onClick={() => window.print()}>
           Imprimir
-        </button>
+        </Button>
       </div>
 
-      {/* comprobante */}
-      <div
-        className="factura-doc"
-        style={{
-          maxWidth: 820,
-          margin: "0 auto",
-          background: "#fff",
-          border: "1px solid var(--color-line)",
-          borderRadius: 6,
-          padding: "28px 32px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-        }}
-      >
-        {/* cabecera */}
-        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid var(--color-ink)", paddingBottom: 14 }}>
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <div
-              style={{
-                width: 40, height: 40, borderRadius: 8, flexShrink: 0,
-                background: "var(--color-ink)", color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontWeight: 700, fontSize: 20,
-              }}
-            >
-              G
-            </div>
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{emp?.empresa || "GQG System"}</div>
-              <div style={{ fontSize: 12, color: "var(--color-slate)" }}>{emp?.direccion}</div>
-              <div style={{ fontSize: 12, color: "var(--color-slate)" }}>
-                Tel: {emp?.telefono} · {emp?.mail}
+      <div className="w-full overflow-x-auto">
+        <div
+          data-a4
+          className="mx-auto w-[794px] border border-line bg-white p-10 text-xs text-ink"
+        >
+          <div className="flex gap-6 border-b border-ink pb-4">
+            <div className="flex-1">
+              <div className="text-base font-bold tracking-[-0.01em] uppercase">
+                {emp?.empresa ?? ""}
               </div>
-              <div style={{ fontSize: 12, color: "var(--color-slate)" }}>RUC: {emp?.ruc}</div>
+              <div className="mt-1 text-[11px] leading-4 text-muted">
+                {emp?.direccion}
+                <br />
+                {[emp?.telefono && `Tel. ${emp.telefono}`, emp?.mail]
+                  .filter(Boolean)
+                  .join(" — ")}
+              </div>
+            </div>
+            <div className="w-[260px] border border-ink px-2.5 py-2 font-mono text-[11px] leading-[17px]">
+              <div className="mb-1 font-sans text-[11px] font-semibold tracking-[0.05em]">
+                RUC {emp?.ruc}
+              </div>
+              <div>TIMBRADO Nº {d.timbrado}</div>
+              <div>VENCE: {fechaCorta(d.timbrado_vence)}</div>
+              <div className="my-1.5 border-t border-outline" />
+              <div className="font-sans text-[11px] font-semibold tracking-[0.05em]">
+                FACTURA
+              </div>
+              <div className="text-sm font-semibold">
+                {nroFactura(d.serie, d.nrofactura)}
+              </div>
             </div>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>FACTURA</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700 }}>
-              {d.serie}-{String(d.nrofactura).padStart(7, "0")}
+
+          <div className="grid grid-cols-[1fr_220px] gap-4 border-b border-outline py-4">
+            <div className="grid grid-cols-[84px_1fr] gap-y-1 text-[11px]">
+              <span className="text-muted">CLIENTE</span>
+              <span className="font-semibold">{d.cliente}</span>
+              <span className="text-muted">CI / RUC</span>
+              <span className="font-mono">{d.documentonro || "—"}</span>
+              <span className="text-muted">DIRECCIÓN</span>
+              <span>{d.cliente_direccion || "—"}</span>
+              <span className="text-muted">TELÉFONO</span>
+              <span className="font-mono">{d.cliente_telefono || "—"}</span>
             </div>
-            <div style={{ fontSize: 12, color: "var(--color-slate)" }}>Timbrado: 12557031</div>
-            <div style={{ fontSize: 12, color: "var(--color-slate)" }}>
-              Condicion: <b>{cred ? "Credito" : "Contado"}</b>
+            <div className="grid grid-cols-[72px_1fr] gap-y-1 text-[11px]">
+              <span className="text-muted">FECHA</span>
+              <span className="font-mono">{fechaCorta(d.fechafactura)}</span>
+              <span className="text-muted">CONDICIÓN</span>
+              <span className="font-semibold">
+                {credito ? "CRÉDITO" : "CONTADO"}
+              </span>
+              {credito && (
+                <>
+                  <span className="text-muted">PLAZO</span>
+                  <span>{d.plazo}</span>
+                </>
+              )}
+              <span className="text-muted">MONEDA</span>
+              <span>{d.moneda}</span>
             </div>
           </div>
-        </div>
 
-        {/* receptor */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, padding: "14px 0", borderBottom: "1px solid var(--color-line)" }}>
-          <div><span style={{ color: "var(--color-slate)" }}>Cliente: </span><b>{d.cliente}</b></div>
-          <div><span style={{ color: "var(--color-slate)" }}>RUC/CI: </span>{d.documentonro}</div>
-          <div><span style={{ color: "var(--color-slate)" }}>Fecha: </span>{fechaCorta(d.fechafactura)}</div>
-          <div><span style={{ color: "var(--color-slate)" }}>Plazo: </span>{d.plazo}</div>
-        </div>
-
-        {/* items */}
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 12 }}>
-          <thead>
-            <tr style={{ background: "var(--color-surface2)", textAlign: "left" }}>
-              <th style={{ padding: "8px 10px" }}>Descripcion</th>
-              <th style={{ padding: "8px 10px", textAlign: "right" }}>Cant</th>
-              <th style={{ padding: "8px 10px", textAlign: "right" }}>Precio</th>
-              <th style={{ padding: "8px 10px", textAlign: "center" }}>IVA</th>
-              <th style={{ padding: "8px 10px", textAlign: "right" }}>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {d.lineas.map((l, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--color-line)" }}>
-                <td style={{ padding: "8px 10px" }}>{l.producto}</td>
-                <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)" }}>{l.cantidad}</td>
-                <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)" }}>{gs(l.precio)}</td>
-                <td style={{ padding: "8px 10px", textAlign: "center" }}>{l.iva}%</td>
-                <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)" }}>{gs(l.total)}</td>
+          <table className="mt-4 w-full border-collapse">
+            <thead>
+              <tr>
+                <th className={`${th} text-left`}>CANT.</th>
+                <th className={`${th} text-left`}>DESCRIPCIÓN</th>
+                <th className={`${th} text-right`}>P. UNIT.</th>
+                <th className={`${th} text-right`}>EXENTAS</th>
+                <th className={`${th} text-right`}>5%</th>
+                <th className={`${th} text-right`}>10%</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* totales */}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
-          <table style={{ fontSize: 13, fontFamily: "var(--font-mono)" }}>
+            </thead>
             <tbody>
-              <tr><td style={{ padding: "3px 14px", color: "var(--color-slate)" }}>Exentas</td><td style={{ padding: "3px 0", textAlign: "right" }}>{gs(exentas)}</td></tr>
-              <tr><td style={{ padding: "3px 14px", color: "var(--color-slate)" }}>Gravado 5% / 10%</td><td style={{ padding: "3px 0", textAlign: "right" }}>{gs(grav5)} / {gs(grav10)}</td></tr>
-              <tr><td style={{ padding: "3px 14px", color: "var(--color-slate)" }}>IVA (5% + 10%)</td><td style={{ padding: "3px 0", textAlign: "right" }}>{gs(totalIva)}</td></tr>
-              <tr style={{ borderTop: "1px solid var(--color-ink)", fontWeight: 700 }}>
-                <td style={{ padding: "6px 14px" }}>TOTAL</td><td style={{ padding: "6px 0", textAlign: "right" }}>{gs(d.totalfactura)} Gs</td>
+              {d.lineas.map((l) => {
+                const tasa = Number(l.iva);
+                return (
+                  <tr key={l.codbarra}>
+                    <td className={td}>{gs(l.cantidad)}</td>
+                    <td className={`${td} font-sans`}>{l.producto}</td>
+                    <td className={`${td} text-right`}>{gs(l.precio)}</td>
+                    <td className={`${td} text-right`}>
+                      {tasa === 0 ? gs(l.total) : "—"}
+                    </td>
+                    <td className={`${td} text-right`}>
+                      {tasa === 5 ? gs(l.total) : "—"}
+                    </td>
+                    <td className={`${td} text-right`}>
+                      {tasa === 10 ? gs(l.total) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr>
+                <td
+                  colSpan={3}
+                  className="border-t border-ink px-1 py-1.5 text-right text-[10px] font-semibold tracking-[0.05em]"
+                >
+                  SUBTOTALES
+                </td>
+                <td className="border-t border-ink px-1 py-1.5 text-right font-mono text-[11px] font-semibold">
+                  {gs(iva.exento)}
+                </td>
+                <td className="border-t border-ink px-1 py-1.5 text-right font-mono text-[11px] font-semibold">
+                  {gs(iva.sub5)}
+                </td>
+                <td className="border-t border-ink px-1 py-1.5 text-right font-mono text-[11px] font-semibold">
+                  {gs(iva.sub10)}
+                </td>
               </tr>
             </tbody>
           </table>
-        </div>
 
-        {/* plan de cuotas */}
-        {cred && d.cuotas.length > 0 && (
-          <div style={{ marginTop: 22 }}>
-            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>Cuentas a cobrar</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "var(--color-surface2)", textAlign: "left" }}>
-                  <th style={{ padding: "7px 10px" }}>Cuota</th>
-                  <th style={{ padding: "7px 10px", textAlign: "right" }}>Importe</th>
-                  <th style={{ padding: "7px 10px", textAlign: "right" }}>Vence</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.cuotas.map((c) => (
-                  <tr key={c.cuota} style={{ borderBottom: "1px solid var(--color-line)", fontFamily: "var(--font-mono)" }}>
-                    <td style={{ padding: "7px 10px" }}>{cuotaLabel(c.cuota, d.cuotas.length)}</td>
-                    <td style={{ padding: "7px 10px", textAlign: "right" }}>{gs(c.importe)}</td>
-                    <td style={{ padding: "7px 10px", textAlign: "right" }}>{fechaCorta(c.vence)}</td>
+          <div className="mt-4 grid grid-cols-[1fr_280px] gap-6">
+            <div>
+              <div className="mb-1 text-[10px] font-semibold tracking-[0.05em] text-muted">
+                TOTAL EN LETRAS
+              </div>
+              <div className="text-[11px] leading-4">Guaraníes {letras}.</div>
+              <div className="mt-4 mb-1 text-[10px] font-semibold tracking-[0.05em] text-muted">
+                LIQUIDACIÓN DEL IVA
+              </div>
+              <div className="flex flex-wrap gap-4 font-mono text-[11px]">
+                <span>IVA 5%: {gs(iva.iva5)}</span>
+                <span>IVA 10%: {gs(iva.iva10)}</span>
+                <span className="font-semibold">
+                  TOTAL IVA: {gs(iva.totalIva)}
+                </span>
+              </div>
+            </div>
+            <div className="self-start border border-ink">
+              <div className="flex justify-between border-b border-[#EFEFEF] px-2 py-[5px] text-[11px]">
+                <span>Subtotal</span>
+                <span className="font-mono">{gs(d.totalfactura)}</span>
+              </div>
+              <div className="flex items-baseline justify-between bg-head p-2">
+                <span className="text-[11px] font-semibold tracking-[0.05em]">
+                  TOTAL A PAGAR Gs
+                </span>
+                <span className="font-mono text-[15px] font-bold">
+                  {gs(d.totalfactura)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {credito && d.cuotas.length > 0 && (
+            <div className="mt-6 border-t border-outline pt-3">
+              <div className="mb-1.5 text-[10px] font-semibold tracking-[0.05em] text-muted">
+                CUOTAS — VENTA A CRÉDITO
+              </div>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="border-b border-outline p-1 text-left text-[10px] font-semibold tracking-[0.05em]">
+                      CUOTA
+                    </th>
+                    <th className="border-b border-outline p-1 text-left text-[10px] font-semibold tracking-[0.05em]">
+                      VENCIMIENTO
+                    </th>
+                    <th className="border-b border-outline p-1 text-right text-[10px] font-semibold tracking-[0.05em]">
+                      IMPORTE Gs
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ fontFamily: "var(--font-mono)", fontWeight: 700 }}>
-                  <td style={{ padding: "7px 10px" }}>Total</td>
-                  <td style={{ padding: "7px 10px", textAlign: "right" }}>{gs(totalCuotas)}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  {d.cuotas.map((c) => (
+                    <tr key={c.cuota}>
+                      <td className="border-b border-[#EFEFEF] p-1 font-mono text-[11px]">
+                        {cuotaLabel(c.cuota, d.cuotas.length)}
+                      </td>
+                      <td className="border-b border-[#EFEFEF] p-1 font-mono text-[11px]">
+                        {fechaCorta(c.vence)}
+                      </td>
+                      <td className="border-b border-[#EFEFEF] p-1 text-right font-mono text-[11px]">
+                        {gs(c.importe)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-        {/* firma */}
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 40, marginTop: 48 }}>
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ borderTop: "1px solid var(--color-ink)", paddingTop: 6, fontSize: 12, color: "var(--color-slate)" }}>
-              Recibi conforme
+          <div className="mt-12 flex gap-12">
+            <div className="flex-1 border-t border-ink pt-1 text-center text-[10px] text-muted">
+              FIRMA DEL EMISOR
+            </div>
+            <div className="flex-1 border-t border-ink pt-1 text-center text-[10px] text-muted">
+              RECIBÍ CONFORME
             </div>
           </div>
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ borderTop: "1px solid var(--color-ink)", paddingTop: 6, fontSize: 12, color: "var(--color-slate)" }}>
-              {emp?.empresa || "GQG System"}
-            </div>
+          <div className="mt-4 text-center text-[9px] text-subtle">
+            Documento no fiscal — comprobante interno de{" "}
+            {emp?.empresa ?? "GQG System"}.
           </div>
         </div>
-
-        <p style={{ fontSize: 11, color: "var(--color-slate)", marginTop: 24, textAlign: "center" }}>
-          {cantItems} item(s) · Documento no fiscal - comprobante interno de GQG System.
-        </p>
       </div>
     </div>
   );

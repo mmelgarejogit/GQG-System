@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ConfirmDialog from "@/components/ConfirmDialog";
-
-type Confirmacion = {
-  title: string;
-  message: string;
-  label: string;
-  icon: string;
-  danger: boolean;
-  run: () => Promise<void>;
-};
+import {
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  ErrorBox,
+  IconButton,
+  Label,
+  SectionLabel,
+  cx,
+  inputCls,
+  monoInputCls,
+  selectCls,
+  tdCls,
+  thCls,
+} from "@/components/ui";
+import { gs } from "@/lib/format";
 
 type Producto = {
   codbarra: string;
@@ -22,25 +30,48 @@ type Producto = {
   activo: number;
 };
 
-const gs = (n: number) => Math.round(n).toLocaleString("es-PY");
-const VACIO = { producto: "", codbarra: "", iva: "10", servicio: "0", precio: "" };
+const VACIO = {
+  producto: "",
+  codbarra: "",
+  iva: "10",
+  servicio: "0",
+  precio: "",
+};
 
 export default function ProductosPage() {
-  const [productos, setProductos] = useState<Producto[]>([]);
+  const [productos, setProductos] = useState<Producto[] | null>(null);
+  const [filtro, setFiltro] = useState("activos");
+  const [abierto, setAbierto] = useState(false);
   const [f, setF] = useState(VACIO);
   const [editId, setEditId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
+  const [confirmar, setConfirmar] = useState<Producto | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
   function cargar() {
-    void fetch("/api/productos?inactivos=1").then((r) => r.json()).then(setProductos);
+    fetch("/api/productos?inactivos=1")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(setProductos)
+      .catch(() => setError("No se pudieron cargar los productos."));
   }
   useEffect(cargar, []);
 
-  function set(k: keyof typeof f, v: string) {
-    setF((x) => ({ ...x, [k]: v }));
+  const filtrados = useMemo(
+    () =>
+      (productos ?? []).filter(
+        (p) =>
+          filtro === "todos" ||
+          (filtro === "activos" ? p.activo === 1 : p.activo !== 1),
+      ),
+    [productos, filtro],
+  );
+
+  function nuevo() {
+    setEditId(null);
+    setF(VACIO);
+    setError(null);
+    setAbierto(true);
   }
 
   function editar(p: Producto) {
@@ -49,260 +80,292 @@ export default function ProductosPage() {
     setF({
       producto: p.producto,
       codbarra: p.codbarra,
-      iva: String(p.iva),
+      iva: String(Number(p.iva)),
       servicio: String(p.servicio),
       precio: p.precio ? String(Math.round(p.precio)) : "",
     });
+    setAbierto(true);
   }
 
-  function cancelar() {
+  function cerrar() {
+    setAbierto(false);
     setEditId(null);
     setF(VACIO);
     setError(null);
   }
 
   async function guardar() {
-    if (!f.producto.trim()) return setError("El nombre es obligatorio");
-    if (!editId && !f.codbarra.trim()) return setError("El codigo de barra es obligatorio");
+    if (!f.producto.trim()) return setError("El nombre es obligatorio.");
+    if (!editId && !f.codbarra.trim())
+      return setError("El código de barra es obligatorio.");
     setBusy(true);
     setError(null);
-    const r = await fetch(editId ? `/api/productos/${editId}` : "/api/productos", {
-      method: editId ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        producto: f.producto,
-        codbarra: f.codbarra,
-        iva: Number(f.iva),
-        servicio: Number(f.servicio),
-        precio: Number(f.precio) || 0,
-      }),
-    });
+    const r = await fetch(
+      editId ? `/api/productos/${editId}` : "/api/productos",
+      {
+        method: editId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          producto: f.producto,
+          codbarra: f.codbarra,
+          iva: Number(f.iva),
+          servicio: Number(f.servicio),
+          precio: Number(f.precio) || 0,
+        }),
+      },
+    );
+    setBusy(false);
     if (r.ok) {
-      cancelar();
+      cerrar();
       cargar();
     } else {
       const d = await r.json().catch(() => ({}));
-      setError(d.error || "No se pudo guardar el producto");
+      setError(d.error || "No se pudo guardar el producto.");
     }
-    setBusy(false);
   }
 
-  function pedirDesactivar(p: Producto) {
-    setConfirmacion({
-      title: "Desactivar producto",
-      message: `"${p.producto}" no aparecera en nuevas ventas. Podes reactivarlo despues.`,
-      label: "Desactivar",
-      icon: "block",
-      danger: true,
-      run: async () => {
-        const r = await fetch(`/api/productos/${p.productoid}`, { method: "DELETE" });
-        if (r.ok) {
-          if (editId === p.productoid) cancelar();
-          cargar();
-        } else {
-          const d = await r.json().catch(() => ({}));
-          setError(d.error || "No se pudo desactivar el producto");
-        }
-      },
-    });
-  }
-
-  function pedirReactivar(p: Producto) {
-    setConfirmacion({
-      title: "Reactivar producto",
-      message: `"${p.producto}" volvera a estar disponible en las ventas.`,
-      label: "Reactivar",
-      icon: "check_circle",
-      danger: false,
-      run: async () => {
-        const r = await fetch(`/api/productos/${p.productoid}`, { method: "PATCH" });
-        if (r.ok) cargar();
-        else {
-          const d = await r.json().catch(() => ({}));
-          setError(d.error || "No se pudo reactivar el producto");
-        }
-      },
-    });
-  }
-
-  async function ejecutarConfirmacion() {
-    if (!confirmacion) return;
+  async function cambiarEstado() {
+    if (!confirmar) return;
     setConfirmBusy(true);
-    await confirmacion.run();
+    const r = await fetch(`/api/productos/${confirmar.productoid}`, {
+      method: confirmar.activo ? "DELETE" : "PATCH",
+    });
     setConfirmBusy(false);
-    setConfirmacion(null);
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      setError(d.error || "No se pudo actualizar el producto.");
+    } else if (editId === confirmar.productoid) cerrar();
+    setConfirmar(null);
+    cargar();
   }
 
-  const inputCls =
-    "h-10 w-full rounded border border-outline-variant bg-transparent px-md font-body-md text-body-md text-primary outline-none focus:border-primary disabled:opacity-60";
+  const vacioTexto =
+    filtro === "inactivos"
+      ? [
+          "No hay productos dados de baja",
+          "La baja lógica conserva el histórico de facturación.",
+        ]
+      : filtro === "activos" && (productos?.length ?? 0) > 0
+        ? ["No hay productos activos", "Reactivá uno o cargá uno nuevo."]
+        : [
+            "Todavía no hay productos",
+            "Cargá el primero con «Nuevo producto».",
+          ];
 
   return (
-    <div className="mx-auto grid max-w-[1100px] grid-cols-12 gap-xl">
-      <div className="col-span-12 lg:col-span-7">
-        <section className="overflow-hidden rounded-lg border border-outline-variant bg-surface-lowest">
-          <div className="flex items-center gap-xs border-b border-outline-variant p-lg">
-            <span className="material-symbols-outlined text-primary">inventory_2</span>
-            <h2 className="font-headline-sm text-headline-sm text-primary">Productos</h2>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          className={cx(selectCls, "w-auto")}
+        >
+          <option value="activos">Solo activos</option>
+          <option value="inactivos">Solo dados de baja</option>
+          <option value="todos">Todos</option>
+        </select>
+        <div className="flex-1" />
+        <Button variant="primary" onClick={nuevo}>
+          Nuevo producto
+        </Button>
+      </div>
+
+      {error && !abierto && <ErrorBox>{error}</ErrorBox>}
+
+      {abierto && (
+        <Card className="p-4">
+          <div className="mb-4 flex items-center">
+            <SectionLabel>
+              {editId ? "EDITAR PRODUCTO" : "NUEVO PRODUCTO"}
+            </SectionLabel>
+            <div className="flex-1" />
+            <button
+              onClick={cerrar}
+              className="cursor-pointer text-xs text-subtle underline"
+            >
+              Cancelar
+            </button>
           </div>
-          <table className="w-full border-collapse text-left">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
+            <div className="sm:col-span-2">
+              <Label>NOMBRE</Label>
+              <input
+                className={inputCls}
+                value={f.producto}
+                onChange={(e) => setF({ ...f, producto: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>CÓDIGO DE BARRA{editId ? " (NO EDITABLE)" : ""}</Label>
+              <input
+                className={monoInputCls}
+                value={f.codbarra}
+                disabled={editId !== null}
+                onChange={(e) => setF({ ...f, codbarra: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>PRECIO (Gs)</Label>
+              <input
+                inputMode="numeric"
+                placeholder="0"
+                className={cx(monoInputCls, "text-right")}
+                value={f.precio ? Number(f.precio).toLocaleString("es-PY") : ""}
+                onChange={(e) =>
+                  setF({ ...f, precio: e.target.value.replace(/\D/g, "") })
+                }
+              />
+            </div>
+            <div>
+              <Label>IVA</Label>
+              <select
+                className={selectCls}
+                value={f.iva}
+                onChange={(e) => setF({ ...f, iva: e.target.value })}
+              >
+                <option value="10">10%</option>
+                <option value="5">5%</option>
+                <option value="0">Exento</option>
+              </select>
+            </div>
+            <div>
+              <Label>TIPO</Label>
+              <select
+                className={selectCls}
+                value={f.servicio}
+                onChange={(e) => setF({ ...f, servicio: e.target.value })}
+              >
+                <option value="0">Mercadería</option>
+                <option value="1">Servicio</option>
+              </select>
+            </div>
+          </div>
+          {error && (
+            <div className="mt-4">
+              <ErrorBox>{error}</ErrorBox>
+            </div>
+          )}
+          <div className="mt-4 flex gap-2">
+            <Button variant="primary" onClick={guardar} disabled={busy}>
+              {busy
+                ? "Guardando..."
+                : editId
+                  ? "Guardar cambios"
+                  : "Crear producto"}
+            </Button>
+            <Button onClick={cerrar}>Descartar</Button>
+          </div>
+        </Card>
+      )}
+
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
             <thead>
-              <tr className="bg-surface-container">
-                <th className="px-md py-sm font-label-caps text-label-caps text-secondary">PRODUCTO</th>
-                <th className="px-md py-sm font-label-caps text-label-caps text-secondary">COD. BARRA</th>
-                <th className="px-md py-sm text-right font-label-caps text-label-caps text-secondary">PRECIO</th>
-                <th className="px-md py-sm text-center font-label-caps text-label-caps text-secondary">IVA</th>
-                <th className="px-md py-sm text-right font-label-caps text-label-caps text-secondary">ACCIONES</th>
+              <tr className="bg-head">
+                <th className={cx(thCls, "pl-4")}>CÓDIGO</th>
+                <th className={thCls}>NOMBRE</th>
+                <th className={thCls}>TIPO</th>
+                <th className={cx(thCls, "text-center")}>IVA</th>
+                <th className={cx(thCls, "text-right")}>PRECIO Gs</th>
+                <th className={thCls}>ESTADO</th>
+                <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody>
-              {productos.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-md py-lg font-body-sm text-body-sm text-secondary">
-                    No hay productos todavia.
-                  </td>
-                </tr>
-              ) : (
-                productos.map((p) => {
-                  const inactivo = p.activo === 0;
-                  return (
-                    <tr
-                      key={p.codbarra}
-                      className={`border-b border-outline-variant ${
-                        editId === p.productoid ? "bg-secondary-container/40" : inactivo ? "opacity-55" : ""
-                      }`}
+              {filtrados.map((p) => {
+                const activo = p.activo === 1;
+                return (
+                  <tr
+                    key={p.codbarra}
+                    className={cx(
+                      "border-b border-line hover:bg-hover",
+                      editId === p.productoid && "bg-accent-soft",
+                    )}
+                  >
+                    <td
+                      className={cx(tdCls, "pl-4 font-mono text-xs text-muted")}
                     >
-                      <td className="px-md py-md font-body-md text-body-md text-primary">
-                        <span className="flex items-center gap-xs">
-                          {p.producto}
-                          {inactivo && (
-                            <span className="rounded bg-surface-container px-1.5 py-0.5 font-label-caps text-label-caps text-secondary">
-                              INACTIVO
-                            </span>
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-md py-md font-tabular-num text-tabular-num text-secondary">{p.codbarra}</td>
-                      <td className="px-md py-md text-right font-tabular-num text-tabular-num text-primary">{gs(p.precio)}</td>
-                      <td className="px-md py-md text-center font-tabular-num text-tabular-num text-secondary">{p.iva}%</td>
-                      <td className="px-md py-md">
-                        <div className="flex justify-end gap-xs">
-                          {inactivo ? (
-                            <button
-                              onClick={() => pedirReactivar(p)}
-                              title="Activar"
-                              className="flex items-center justify-center rounded p-1 text-secondary transition-colors hover:bg-surface-container-high hover:text-ok"
-                            >
-                              <span className="material-symbols-outlined text-base">check_circle</span>
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => editar(p)}
-                                title="Editar"
-                                className="flex items-center justify-center rounded p-1 text-secondary transition-colors hover:bg-surface-container-high hover:text-primary"
-                              >
-                                <span className="material-symbols-outlined text-base">edit</span>
-                              </button>
-                              <button
-                                onClick={() => pedirDesactivar(p)}
-                                title="Desactivar"
-                                className="flex items-center justify-center rounded p-1 text-secondary transition-colors hover:bg-surface-container-high hover:text-error"
-                              >
-                                <span className="material-symbols-outlined text-base">block</span>
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+                      {p.codbarra}
+                    </td>
+                    <td className={cx(tdCls, "font-medium")}>{p.producto}</td>
+                    <td className={cx(tdCls, "text-muted")}>
+                      {p.servicio ? "Servicio" : "Mercadería"}
+                    </td>
+                    <td
+                      className={cx(tdCls, "text-center font-mono text-muted")}
+                    >
+                      {Number(p.iva)}%
+                    </td>
+                    <td
+                      className={cx(tdCls, "text-right font-mono font-medium")}
+                    >
+                      {gs(p.precio)}
+                    </td>
+                    <td className={tdCls}>
+                      <Chip tono={activo ? "ok" : "neutro"}>
+                        {activo ? "Activo" : "Baja"}
+                      </Chip>
+                    </td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      {activo ? (
+                        <>
+                          <IconButton
+                            icon="editar"
+                            title="Editar"
+                            aria-label="Editar"
+                            onClick={() => editar(p)}
+                            className="mr-1"
+                          />
+                          <IconButton
+                            icon="borrar"
+                            danger
+                            title="Dar de baja"
+                            aria-label="Dar de baja"
+                            onClick={() => setConfirmar(p)}
+                          />
+                        </>
+                      ) : (
+                        <IconButton
+                          icon="check"
+                          title="Reactivar"
+                          aria-label="Reactivar"
+                          onClick={() => setConfirmar(p)}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-        </section>
-      </div>
-
-      <div className="col-span-12 lg:col-span-5">
-        <section className="rounded-lg border border-outline-variant bg-surface-lowest p-lg">
-          <div className="mb-lg font-headline-sm text-headline-sm text-primary">
-            {editId ? "Editar producto" : "Nuevo producto"}
-          </div>
-          <div className="space-y-md">
-            <div className="flex flex-col gap-xs">
-              <label className="font-label-caps text-label-caps text-secondary">NOMBRE</label>
-              <input className={inputCls} value={f.producto} onChange={(e) => set("producto", e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-xs">
-              <label className="font-label-caps text-label-caps text-secondary">
-                CODIGO DE BARRA{editId ? " (no editable)" : ""}
-              </label>
-              <input
-                className={inputCls}
-                value={f.codbarra}
-                disabled={editId !== null}
-                onChange={(e) => set("codbarra", e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-xs">
-              <label className="font-label-caps text-label-caps text-secondary">PRECIO (Gs)</label>
-              <input
-                className={`${inputCls} text-right font-tabular-num text-tabular-num`}
-                inputMode="numeric"
-                placeholder="0"
-                value={f.precio ? Number(f.precio).toLocaleString("es-PY") : ""}
-                onChange={(e) => set("precio", e.target.value.replace(/\D/g, ""))}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-md">
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-secondary">IVA</label>
-                <select className={inputCls} value={f.iva} onChange={(e) => set("iva", e.target.value)}>
-                  <option value="10">10%</option>
-                  <option value="5">5%</option>
-                  <option value="0">Exento</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-secondary">TIPO</label>
-                <select className={inputCls} value={f.servicio} onChange={(e) => set("servicio", e.target.value)}>
-                  <option value="0">Mercaderia</option>
-                  <option value="1">Servicio</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          {error && <p className="mt-md font-body-sm text-body-sm text-error">{error}</p>}
-          <div className="mt-lg flex gap-md">
-            {editId && (
-              <button
-                onClick={cancelar}
-                className="h-10 rounded border border-outline-variant px-xl font-label-caps text-label-caps text-primary transition-colors hover:bg-surface-container"
-              >
-                CANCELAR
-              </button>
-            )}
-            <button
-              onClick={guardar}
-              disabled={busy || !f.producto.trim() || (!editId && !f.codbarra.trim())}
-              className="h-10 flex-1 rounded bg-primary px-xl font-label-caps text-label-caps font-bold text-on-primary transition-colors hover:bg-primary-container disabled:opacity-50"
-            >
-              {busy ? "GUARDANDO..." : editId ? "GUARDAR CAMBIOS" : "CREAR PRODUCTO"}
-            </button>
-          </div>
-        </section>
-      </div>
+        </div>
+        {productos !== null && filtrados.length === 0 && (
+          <EmptyState
+            icon="productos"
+            titulo={vacioTexto[0]}
+            texto={vacioTexto[1]}
+          />
+        )}
+      </Card>
 
       <ConfirmDialog
-        open={confirmacion !== null}
-        title={confirmacion?.title ?? ""}
-        message={confirmacion?.message}
-        icon={confirmacion?.icon}
-        confirmLabel={confirmacion?.label}
-        danger={confirmacion?.danger}
+        open={confirmar !== null}
+        title={
+          confirmar?.activo ? "Dar de baja el producto" : "Reactivar producto"
+        }
+        message={
+          confirmar
+            ? confirmar.activo
+              ? `«${confirmar.producto}» dejará de aparecer en nuevas facturas. Se conserva el histórico.`
+              : `«${confirmar.producto}» volverá a estar disponible en las ventas.`
+            : undefined
+        }
+        confirmLabel={confirmar?.activo ? "Dar de baja" : "Reactivar"}
+        danger={confirmar?.activo === 1}
         busy={confirmBusy}
-        onConfirm={ejecutarConfirmacion}
-        onClose={() => setConfirmacion(null)}
+        onConfirm={cambiarEstado}
+        onClose={() => setConfirmar(null)}
       />
     </div>
   );

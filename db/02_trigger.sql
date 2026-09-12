@@ -69,7 +69,8 @@ BEGIN
     WHILE i <= nCuotas DO
       -- dias de vencimiento de esta cuota
       IF isIrregular = 1 THEN
-        SELECT IFNULL(pd.dias, i * 30) INTO dias
+        SET dias = i * 30;
+        SELECT pd.dias INTO dias
           FROM PLAZO_DETALLES pd
           WHERE pd.plazoid = NEW.plazoid AND pd.cuota = i;
       ELSE

@@ -1,432 +1,305 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { fechaCorta, cuotaLabel } from "@/lib/format";
+import {
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  ErrorBox,
+  thCls,
+  tdCls,
+  cx,
+} from "@/components/ui";
+import {
+  cuotaLabel,
+  estadoCuota,
+  fechaCorta,
+  gs,
+  nroFactura,
+  tonoEstado,
+} from "@/lib/format";
 
-type Cliente = { id: number; nombres: string; apellidos: string; documentonro: string };
-type Plazo = {
+type Kpi = { monto: number; cantidad: number };
+type Reciente = {
   id: number;
-  plazo: string;
+  serie: string;
+  nrofactura: number;
+  totalfactura: number;
   tipoid: number;
-  cuotas: number;
-  irregular: number;
-  detalles: { cuota: number; dias: number }[];
+  cliente: string;
 };
-type Producto = { codbarra: string; producto: string; iva: number; precio: number };
-// Linea de la venta: producto elegido + cantidad. El precio sale del producto (editable).
-type Item = { codbarra: string; cantidad: number; precio: number };
+type Agenda = {
+  ventaid: number;
+  cuota: number;
+  importe: number;
+  cobrado: number;
+  vence: string;
+  serie: string;
+  nrofactura: number;
+  cliente: string;
+  total_cuotas: number;
+};
+type Dashboard = {
+  facturado: Kpi;
+  abiertas: Kpi;
+  porVencer: Kpi;
+  vencidas: Kpi;
+  recientes: Reciente[];
+  agenda: Agenda[];
+};
 
-const gs = (n: number) => Math.round(n).toLocaleString("es-PY");
-const hoyIso = () => new Date().toISOString().slice(0, 10);
-function masDias(iso: string, dias: number) {
-  const d = new Date(iso + "T00:00:00");
-  d.setDate(d.getDate() + dias);
-  return fechaCorta(d);
+const MESES = [
+  "ENERO",
+  "FEBRERO",
+  "MARZO",
+  "ABRIL",
+  "MAYO",
+  "JUNIO",
+  "JULIO",
+  "AGOSTO",
+  "SETIEMBRE",
+  "OCTUBRE",
+  "NOVIEMBRE",
+  "DICIEMBRE",
+];
+
+function plural(n: number, uno: string, varios: string) {
+  return `${n} ${n === 1 ? uno : varios}`;
 }
 
-export default function NuevaVenta() {
-  const router = useRouter();
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [plazos, setPlazos] = useState<Plazo[]>([]);
-  const [productos, setProductos] = useState<Producto[]>([]);
+function KpiCard({
+  titulo,
+  monto,
+  detalle,
+  color,
+}: {
+  titulo: string;
+  monto: number;
+  detalle: string;
+  color?: string;
+}) {
+  return (
+    <Card className="p-4">
+      <div className="mb-2 text-[11px] font-semibold tracking-[0.05em] text-subtle">
+        {titulo}
+      </div>
+      <div
+        className={cx(
+          "font-mono text-2xl font-semibold tracking-[-0.01em]",
+          color,
+        )}
+      >
+        {gs(monto)}{" "}
+        <span className="text-[13px] font-medium text-subtle">Gs</span>
+      </div>
+      <div className="mt-2 text-[13px] text-muted">{detalle}</div>
+    </Card>
+  );
+}
 
-  const [clienteid, setClienteid] = useState("");
-  const [fecha, setFecha] = useState(hoyIso());
-  const [credito, setCredito] = useState(true);
-  const [plazoId, setPlazoId] = useState("");
-  const [items, setItems] = useState<Item[]>([{ codbarra: "", cantidad: 1, precio: 0 }]);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [generado, setGenerado] = useState(false);
+export default function InicioPage() {
+  const router = useRouter();
+  const [d, setD] = useState<Dashboard | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    void fetch("/api/clientes").then((r) => r.json()).then(setClientes);
-    void fetch("/api/plazos").then((r) => r.json()).then(setPlazos);
-    void fetch("/api/productos").then((r) => r.json()).then(setProductos);
+    fetch("/api/dashboard")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(setD)
+      .catch(() => setError(true));
   }, []);
 
-  // --- Manejo de las lineas de productos ---
-  const prodDe = (codbarra: string) => productos.find((p) => p.codbarra === codbarra) || null;
-  function setItem(i: number, patch: Partial<Item>) {
-    setItems((xs) => xs.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
-  }
-  function elegirProducto(i: number, codbarra: string) {
-    const p = prodDe(codbarra);
-    // al elegir un producto, el precio se autocompleta con el del catalogo (editable)
-    setItem(i, { codbarra, precio: p ? p.precio : 0 });
-  }
-  function agregarItem() {
-    setItems((xs) => [...xs, { codbarra: "", cantidad: 1, precio: 0 }]);
-  }
-  function quitarItem(i: number) {
-    setItems((xs) => (xs.length > 1 ? xs.filter((_, idx) => idx !== i) : xs));
-  }
+  if (error)
+    return (
+      <ErrorBox titulo="No se pudo cargar el resumen">
+        Revisá la conexión con la base de datos.
+      </ErrorBox>
+    );
 
-  const plazosModo = plazos.filter((p) => p.tipoid === (credito ? 1 : 0));
-  useEffect(() => {
-    if (plazosModo.length && !plazosModo.some((p) => String(p.id) === plazoId)) {
-      setPlazoId(String(plazosModo[0].id));
-    }
-  }, [credito, plazos]);
+  if (!d)
+    return (
+      <div className="animate-gqgpulse flex flex-col gap-6">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-24 rounded-md border border-line bg-surface"
+            />
+          ))}
+        </div>
+        <div className="h-[300px] rounded-md border border-line bg-surface p-4">
+          <div className="mb-6 h-3 w-44 rounded-xs bg-line" />
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="mb-4 h-2.5 rounded-xs bg-head" />
+          ))}
+        </div>
+      </div>
+    );
 
-  const plazo = plazos.find((p) => String(p.id) === plazoId) || null;
-  // El total ya no se escribe a mano: sale de la suma de las lineas (precio x cantidad).
-  const lineasValidas = items.filter((it) => it.codbarra && it.cantidad > 0);
-  const total = lineasValidas.reduce((s, it) => s + it.precio * it.cantidad, 0);
-
-  // Cualquier cambio en los datos invalida la previsualizacion: hay que volver a generar.
-  useEffect(() => {
-    setGenerado(false);
-  }, [clienteid, fecha, credito, plazoId, items]);
-
-  const cuotas = useMemo(() => {
-    if (!plazo || total <= 0) return [] as { n: number; importe: number; vence: string }[];
-    const n = plazo.cuotas;
-    const base = Math.trunc(total / n);
-    const ultima = total - base * (n - 1);
-    const out: { n: number; importe: number; vence: string }[] = [];
-    for (let i = 1; i <= n; i++) {
-      const importe = i < n ? base : ultima;
-      let vence = masDias(fecha, 0);
-      if (plazo.tipoid === 0) vence = masDias(fecha, 0);
-      else if (plazo.irregular)
-        vence = masDias(fecha, plazo.detalles.find((x) => x.cuota === i)?.dias ?? i * 30);
-      else vence = masDias(fecha, i * 30);
-      out.push({ n: i, importe, vence });
-    }
-    return out;
-  }, [plazo, total, fecha]);
-
-  const suma = cuotas.reduce((s, c) => s + c.importe, 0);
-  const cuadra = cuotas.length > 0 && suma === Math.round(total);
-  const mostrar = generado && cuotas.length > 0;
-
-  // Paso 1: valida y revela la previsualizacion de cuotas. NO guarda nada.
-  function previsualizar() {
-    if (!clienteid) return setError("Elegi un cliente");
-    if (!plazoId) return setError("Elegi un plazo");
-    if (lineasValidas.length === 0) return setError("Agrega al menos un producto");
-    if (total <= 0) return setError("El total debe ser mayor a cero");
-    setError(null);
-    setGenerado(true);
-  }
-
-  // Paso 2: persiste la venta (el trigger genera las cuotas en la BD) y redirige.
-  async function confirmar() {
-    if (!generado) return;
-    setBusy(true);
-    setError(null);
-    const lineas = lineasValidas.map((it) => ({
-      codbarra: it.codbarra,
-      precio: it.precio,
-      cantidad: it.cantidad,
-      iva: prodDe(it.codbarra)?.iva ?? 0,
-    }));
-    const r = await fetch("/api/ventas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        clienteid: Number(clienteid),
-        fechafactura: fecha,
-        tipodocid: credito ? 2 : 1,
-        plazoid: Number(plazoId),
-        lineas,
-      }),
-    });
-    if (r.ok) {
-      const d = await r.json();
-      router.push(`/ventas/${d.id}`);
-    } else {
-      const d = await r.json().catch(() => ({}));
-      setError(d.error || "No se pudo generar la venta");
-      setBusy(false);
-    }
-  }
-
-  const inputCls =
-    "h-10 w-full rounded border border-outline-variant bg-transparent px-md font-body-md text-body-md text-primary outline-none focus:border-primary";
+  const mes = MESES[new Date().getMonth()];
 
   return (
-    <div>
-      <div className="mx-auto grid max-w-[1200px] grid-cols-12 gap-xl">
-        {/* -------- Datos de la venta -------- */}
-        <div className="col-span-12 flex flex-col gap-xl lg:col-span-7">
-          <section className="rounded-lg border border-outline-variant bg-surface-lowest p-lg">
-            <div className="mb-lg flex items-center gap-xs">
-              <span className="material-symbols-outlined text-primary">receipt_long</span>
-              <h2 className="font-headline-sm text-headline-sm text-primary">Datos de la venta</h2>
-            </div>
+    <>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+        <KpiCard
+          titulo={`FACTURADO EN ${mes}`}
+          monto={d.facturado.monto}
+          detalle={plural(
+            d.facturado.cantidad,
+            "factura emitida",
+            "facturas emitidas",
+          )}
+        />
+        <KpiCard
+          titulo="SALDO A COBRAR"
+          monto={d.abiertas.monto}
+          detalle={plural(
+            d.abiertas.cantidad,
+            "cuota abierta",
+            "cuotas abiertas",
+          )}
+        />
+        <KpiCard
+          titulo="VENCE EN 7 DÍAS"
+          monto={d.porVencer.monto}
+          detalle={plural(
+            d.porVencer.cantidad,
+            "cuota por vencer",
+            "cuotas por vencer",
+          )}
+          color="text-warn"
+        />
+        <KpiCard
+          titulo="VENCIDAS"
+          monto={d.vencidas.monto}
+          detalle={plural(
+            d.vencidas.cantidad,
+            "cuota vencida",
+            "cuotas vencidas",
+          )}
+          color="text-error"
+        />
+      </div>
 
-            <div className="space-y-md">
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-secondary">CLIENTE</label>
-                <select className={inputCls} value={clienteid} onChange={(e) => setClienteid(e.target.value)}>
-                  <option value="">Elegir cliente...</option>
-                  {clientes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombres} {c.apellidos} ({c.documentonro})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-secondary">FECHA</label>
-                <input type="date" className={inputCls} value={fecha} onChange={(e) => setFecha(e.target.value)} />
-              </div>
-
-              <div className="flex flex-col gap-xs pt-sm">
-                <label className="font-label-caps text-label-caps text-secondary">MODALIDAD</label>
-                <div className="flex w-fit rounded bg-surface-container p-xs">
-                  {[
-                    { v: false, t: "CONTADO" },
-                    { v: true, t: "CREDITO" },
-                  ].map((m) => (
-                    <button
-                      key={m.t}
-                      onClick={() => setCredito(m.v)}
-                      className={`px-xl py-xs font-label-caps text-label-caps transition-colors ${
-                        credito === m.v
-                          ? "rounded border border-outline-variant bg-surface-lowest font-bold text-primary shadow-sm"
-                          : "text-secondary hover:text-primary"
-                      }`}
-                    >
-                      {m.t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-secondary">PLAZO</label>
-                <div className="relative">
-                  <select
-                    className={`${inputCls} appearance-none pr-9`}
-                    value={plazoId}
-                    onChange={(e) => setPlazoId(e.target.value)}
-                  >
-                    {plazosModo.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.plazo} - {p.irregular ? "irregular" : p.tipoid === 0 ? "contado" : "regular"} - {p.cuotas} cuota(s)
-                      </option>
-                    ))}
-                  </select>
-                  <span className="material-symbols-outlined pointer-events-none absolute right-md top-1/2 -translate-y-1/2 text-secondary">
-                    expand_more
-                  </span>
-                </div>
-              </div>
-
-              {/* -------- Productos de la venta -------- */}
-              <div className="flex flex-col gap-xs pt-sm">
-                <div className="flex items-center justify-between">
-                  <label className="font-label-caps text-label-caps text-secondary">PRODUCTOS</label>
-                  <button
-                    type="button"
-                    onClick={agregarItem}
-                    className="flex items-center gap-1 font-label-caps text-label-caps text-secondary transition-colors hover:text-primary"
-                  >
-                    <span className="material-symbols-outlined text-base">add</span> AGREGAR
-                  </button>
-                </div>
-
-                <div className="overflow-hidden rounded border border-outline-variant">
-                  <div className="grid grid-cols-[1fr_92px_56px_104px_36px] items-center gap-xs bg-surface-container px-md py-xs font-label-caps text-label-caps text-secondary">
-                    <span>PRODUCTO</span>
-                    <span className="text-right">PRECIO</span>
-                    <span className="text-right">CANT</span>
-                    <span className="text-right">SUBTOTAL</span>
-                    <span />
-                  </div>
-                  {items.map((it, i) => {
-                    const sub = it.precio * it.cantidad;
-                    return (
-                      <div
-                        key={i}
-                        className="grid grid-cols-[1fr_92px_56px_104px_36px] items-center gap-xs border-t border-outline-variant px-md py-xs"
-                      >
-                        <select
-                          className="h-9 w-full rounded border border-outline-variant bg-transparent px-2 font-body-sm text-body-sm text-primary outline-none focus:border-primary"
-                          value={it.codbarra}
-                          onChange={(e) => elegirProducto(i, e.target.value)}
-                        >
-                          <option value="">Elegir...</option>
-                          {productos.map((p) => (
-                            <option key={p.codbarra} value={p.codbarra}>
-                              {p.producto}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          className="h-9 w-full rounded border border-outline-variant bg-transparent px-2 text-right font-tabular-num text-tabular-num text-primary outline-none focus:border-primary"
-                          inputMode="numeric"
-                          value={it.precio ? it.precio.toLocaleString("es-PY") : ""}
-                          onChange={(e) => setItem(i, { precio: Number(e.target.value.replace(/\D/g, "")) || 0 })}
-                        />
-                        <input
-                          className="h-9 w-full rounded border border-outline-variant bg-transparent px-2 text-right font-tabular-num text-tabular-num text-primary outline-none focus:border-primary"
-                          inputMode="numeric"
-                          value={it.cantidad || ""}
-                          onChange={(e) => setItem(i, { cantidad: Number(e.target.value.replace(/\D/g, "")) || 0 })}
-                        />
-                        <span className="text-right font-tabular-num text-tabular-num text-primary">{gs(sub)}</span>
-                        <button
-                          type="button"
-                          onClick={() => quitarItem(i)}
-                          disabled={items.length === 1}
-                          className="flex items-center justify-center text-secondary transition-colors hover:text-error disabled:opacity-30"
-                          aria-label="Quitar producto"
-                        >
-                          <span className="material-symbols-outlined text-base">close</span>
-                        </button>
-                      </div>
-                    );
-                  })}
-                  <div className="grid grid-cols-[1fr_92px_56px_104px_36px] items-center gap-xs border-t border-outline-variant bg-surface-bright px-md py-sm">
-                    <span className="font-label-caps text-label-caps text-secondary">TOTAL</span>
-                    <span />
-                    <span />
-                    <span className="text-right font-tabular-num text-tabular-num font-bold text-primary">{gs(total)}</span>
-                    <span />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {error && <p className="mt-md font-body-sm text-body-sm text-error">{error}</p>}
-
-            <div className="mt-xl flex justify-end gap-md border-t border-outline-variant pt-lg">
-              <button
-                onClick={() => { setItems([{ codbarra: "", cantidad: 1, precio: 0 }]); setClienteid(""); setError(null); setGenerado(false); }}
-                className="h-10 rounded border border-outline-variant px-xl font-label-caps text-label-caps text-primary transition-colors hover:bg-surface-container"
+      <div className="flex flex-wrap items-start gap-6">
+        <Card className="min-w-0 flex-[1_1_480px] overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-line p-4">
+            <div className="text-base font-semibold">Ventas recientes</div>
+            <div className="flex-1" />
+            <Button size="sm" onClick={() => router.push("/ventas")}>
+              Ver todas
+            </Button>
+          </div>
+          {d.recientes.length === 0 ? (
+            <EmptyState
+              icon="ventas"
+              titulo="Todavía no hay ventas"
+              texto="Las facturas emitidas aparecen acá."
+            >
+              <Button
+                variant="primary"
+                onClick={() => router.push("/ventas/nueva")}
               >
-                DESCARTAR
-              </button>
-              <button
-                onClick={previsualizar}
-                disabled={busy || total <= 0}
-                className="h-10 rounded bg-primary px-xl font-label-caps text-label-caps font-bold text-on-primary transition-colors hover:bg-primary-container disabled:opacity-50"
-              >
-                {generado ? "CUOTAS GENERADAS" : "GENERAR CUOTAS"}
-              </button>
-            </div>
-          </section>
-        </div>
-
-        {/* -------- Cuentas a cobrar -------- */}
-        <div className="col-span-12 flex flex-col gap-xl lg:col-span-5">
-          <section className="flex h-full flex-col overflow-hidden rounded-lg border border-outline-variant bg-surface-lowest">
-            <div className="flex items-center justify-between border-b border-outline-variant p-lg">
-              <div className="flex items-center gap-xs">
-                <span className="material-symbols-outlined text-primary">account_balance_wallet</span>
-                <h2 className="font-headline-sm text-headline-sm text-primary">Cuentas a cobrar</h2>
-              </div>
-              <span
-                className={`rounded-full px-md py-1 font-label-caps text-label-caps ${
-                  credito ? "bg-secondary-container text-on-secondary-container" : "bg-green-100 text-green-800"
-                }`}
-              >
-                {credito ? "CREDITO" : "CONTADO"}
-              </span>
-            </div>
-
-            <div className="flex-1 overflow-x-auto">
-              <table className="w-full border-collapse text-left">
+                Nueva venta
+              </Button>
+            </EmptyState>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
                 <thead>
-                  <tr className="bg-surface-container">
-                    <th className="border-b border-outline-variant px-md py-sm font-label-caps text-label-caps text-secondary">CUOTA</th>
-                    <th className="border-b border-outline-variant px-md py-sm text-right font-label-caps text-label-caps text-secondary">IMPORTE</th>
-                    <th className="border-b border-outline-variant px-md py-sm text-right font-label-caps text-label-caps text-secondary">VENCE</th>
+                  <tr className="bg-head">
+                    <th className={cx(thCls, "pl-4")}>FACTURA</th>
+                    <th className={thCls}>CLIENTE</th>
+                    <th className={thCls}>MOD.</th>
+                    <th className={cx(thCls, "pr-4 text-right")}>TOTAL</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {!mostrar ? (
-                    <tr>
-                      <td colSpan={3} className="px-md py-lg font-body-sm text-body-sm text-secondary">
-                        {total > 0 && plazo
-                          ? "Presioná «Generar cuotas» para previsualizar."
-                          : "Cargá el total para ver las cuotas."}
+                  {d.recientes.map((v) => (
+                    <tr
+                      key={v.id}
+                      onClick={() => router.push(`/ventas/${v.id}`)}
+                      className="cursor-pointer border-b border-line hover:bg-hover"
+                    >
+                      <td
+                        className={cx(
+                          tdCls,
+                          "pl-4 font-mono whitespace-nowrap",
+                        )}
+                      >
+                        {nroFactura(v.serie, v.nrofactura)}
+                      </td>
+                      <td className={tdCls}>{v.cliente}</td>
+                      <td className={tdCls}>
+                        <Chip tono={v.tipoid === 1 ? "credito" : "neutro"}>
+                          {v.tipoid === 1 ? "Crédito" : "Contado"}
+                        </Chip>
+                      </td>
+                      <td
+                        className={cx(
+                          tdCls,
+                          "pr-4 text-right font-mono font-medium",
+                        )}
+                      >
+                        {gs(v.totalfactura)}
                       </td>
                     </tr>
-                  ) : (
-                    cuotas.map((c) => (
-                      <tr key={c.n} className="transition-colors hover:bg-blue-50/30">
-                        <td className="border-b border-outline-variant px-md py-md font-body-md text-body-md text-primary">
-                          {cuotaLabel(c.n, plazo?.cuotas ?? 0)}
-                        </td>
-                        <td className="border-b border-outline-variant px-md py-md text-right font-tabular-num text-tabular-num text-primary">{gs(c.importe)}</td>
-                        <td className="border-b border-outline-variant px-md py-md text-right font-tabular-num text-tabular-num text-secondary">{c.vence}</td>
-                      </tr>
-                    ))
-                  )}
+                  ))}
                 </tbody>
-                {mostrar && (
-                  <tfoot>
-                    <tr className="bg-surface-bright">
-                      <td className="px-md py-md font-body-md text-body-md font-bold text-primary">Total</td>
-                      <td className="px-md py-md text-right font-tabular-num text-tabular-num font-bold text-primary">{gs(suma)}</td>
-                      <td className="px-md py-md" />
-                    </tr>
-                  </tfoot>
-                )}
               </table>
             </div>
+          )}
+        </Card>
 
-            <div className="mt-auto p-lg">
-              {mostrar && (
-                <p className="text-center font-body-sm text-body-sm italic text-secondary">
-                  {cuadra
-                    ? "Cuotas calculadas por el trigger; la suma coincide con el total."
-                    : `Diferencia de ${gs(Math.round(total) - suma)} Gs (redondeo).`}
-                </p>
-              )}
-              <button
-                onClick={confirmar}
-                disabled={busy || !generado}
-                className="mt-lg w-full rounded bg-primary py-md font-headline-sm text-headline-sm font-bold text-on-primary shadow-sm transition-all active:opacity-90 disabled:opacity-50"
-              >
-                {busy ? "CONFIRMANDO..." : "CONFIRMAR VENTA"}
-              </button>
+        <Card className="min-w-0 flex-[1_1_340px]">
+          <div className="border-b border-line p-4">
+            <div className="text-base font-semibold">Cuentas a cobrar</div>
+            <div className="mt-0.5 text-[13px] text-muted">
+              Próximos vencimientos
             </div>
-          </section>
-        </div>
+          </div>
+          {d.agenda.length === 0 ? (
+            <EmptyState
+              icon="check"
+              titulo="Sin cuotas pendientes"
+              texto="Todas las cuotas están cobradas."
+            />
+          ) : (
+            d.agenda.map((c) => {
+              const estado = estadoCuota(c);
+              return (
+                <Link
+                  key={`${c.ventaid}-${c.cuota}`}
+                  href={`/ventas/${c.ventaid}`}
+                  className="flex items-center gap-3 border-b border-line px-4 py-2.5 text-ink no-underline hover:bg-hover"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium">
+                      {c.cliente}
+                    </div>
+                    <div className="font-mono text-[11px] text-subtle">
+                      {nroFactura(c.serie, c.nrofactura)} · cuota{" "}
+                      {cuotaLabel(c.cuota, c.total_cuotas)}
+                    </div>
+                  </div>
+                  <div className="flex-none text-right">
+                    <div className="font-mono text-[13px] font-medium">
+                      {gs(c.importe - c.cobrado)}
+                    </div>
+                    <div className="font-mono text-[11px] text-subtle">
+                      {fechaCorta(c.vence)}
+                    </div>
+                  </div>
+                  <Chip tono={tonoEstado(estado)}>{estado}</Chip>
+                </Link>
+              );
+            })
+          )}
+        </Card>
       </div>
-
-      {/* -------- Bento de contexto -------- */}
-      <div className="mx-auto mt-xl grid max-w-[1200px] grid-cols-3 gap-xl">
-        <div className="rounded-lg border border-outline-variant bg-surface-container-low p-lg">
-          <div className="mb-sm flex items-center gap-xs">
-            <span className="material-symbols-outlined text-base text-secondary">info</span>
-            <span className="font-label-caps text-label-caps text-secondary">RESUMEN</span>
-          </div>
-          <div className="font-tabular-num text-headline-sm text-primary">{gs(total)} Gs</div>
-          <p className="mt-sm font-body-sm text-body-sm text-secondary">
-            {credito ? `${plazo?.cuotas ?? 0} cuota(s) - ${plazo?.plazo ?? ""}` : "Contado - una cuota"}
-          </p>
-        </div>
-        <div className="rounded-lg border border-outline-variant bg-surface-container-low p-lg">
-          <div className="mb-sm flex items-center gap-xs">
-            <span className="material-symbols-outlined text-base text-secondary">event</span>
-            <span className="font-label-caps text-label-caps text-secondary">VENCIMIENTO FINAL</span>
-          </div>
-          <div className="font-tabular-num text-headline-sm text-primary">
-            {cuotas.length ? cuotas[cuotas.length - 1].vence : "-"}
-          </div>
-          <p className="mt-sm font-body-sm text-body-sm text-secondary">Ultima cuota a cobrar.</p>
-        </div>
-        <div className="flex flex-col items-center justify-center rounded-lg border border-outline-variant bg-surface-container-low p-lg text-center">
-          <span className="material-symbols-outlined mb-xs text-secondary">verified</span>
-          <span className="font-label-caps text-label-caps text-secondary">ESTADO</span>
-          <div
-            className={`mt-xs rounded-full px-md py-1 font-label-caps text-label-caps ${
-              cuadra ? "bg-green-100 text-green-800" : "bg-surface-container text-secondary"
-            }`}
-          >
-            {cuotas.length === 0 ? "SIN DATOS" : cuadra ? "CUADRA" : "REVISAR"}
-          </div>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }

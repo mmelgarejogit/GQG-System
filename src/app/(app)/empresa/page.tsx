@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Button,
+  Card,
+  ErrorBox,
+  Label,
+  inputCls,
+  monoInputCls,
+  selectCls,
+} from "@/components/ui";
 
 type Empresa = {
   id: number;
@@ -11,7 +20,14 @@ type Empresa = {
   ruc: string;
 };
 
-const VACIA: Empresa = { id: 0, empresa: "", direccion: "", telefono: "", mail: "", ruc: "" };
+const VACIA: Empresa = {
+  id: 0,
+  empresa: "",
+  direccion: "",
+  telefono: "",
+  mail: "",
+  ruc: "",
+};
 
 export default function EmpresaPage() {
   const [f, setF] = useState<Empresa>(VACIA);
@@ -19,11 +35,14 @@ export default function EmpresaPage() {
   const [ok, setOk] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    void fetch("/api/empresa")
-      .then((r) => r.json())
-      .then((e) => e && setF({ ...VACIA, ...e }));
+  const cargar = useCallback(() => {
+    fetch("/api/empresa")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((e) => e && setF({ ...VACIA, ...e }))
+      .catch(() => setError("No se pudieron cargar los datos de la empresa."));
   }, []);
+
+  useEffect(cargar, [cargar]);
 
   function set(k: keyof Empresa, v: string) {
     setOk(false);
@@ -31,8 +50,8 @@ export default function EmpresaPage() {
   }
 
   async function guardar() {
-    if (!f.empresa.trim()) return setError("El nombre de la empresa es obligatorio");
-    if (!f.ruc.trim()) return setError("El RUC es obligatorio");
+    if (!f.empresa.trim()) return setError("La razón social es obligatoria.");
+    if (!f.ruc.trim()) return setError("El RUC es obligatorio.");
     setBusy(true);
     setError(null);
     const r = await fetch("/api/empresa", {
@@ -40,62 +59,89 @@ export default function EmpresaPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(f),
     });
-    if (r.ok) {
-      setOk(true);
-    } else {
-      const d = await r.json().catch(() => ({}));
-      setError(d.error || "No se pudo guardar");
-    }
     setBusy(false);
+    if (r.ok) setOk(true);
+    else {
+      const d = await r.json().catch(() => ({}));
+      setError(d.error || "No se pudo guardar.");
+    }
   }
 
-  const inputCls =
-    "h-10 w-full rounded border border-outline-variant bg-transparent px-md font-body-md text-body-md text-primary outline-none focus:border-primary";
-
   return (
-    <div className="mx-auto max-w-[640px]">
-      <section className="rounded-lg border border-outline-variant bg-surface-lowest p-lg">
-        <div className="mb-lg flex items-center gap-xs">
-          <span className="material-symbols-outlined text-primary">storefront</span>
-          <h2 className="font-headline-sm text-headline-sm text-primary">Datos de la empresa</h2>
+    <Card className="max-w-[720px] p-6">
+      <div className="mb-1 text-base font-semibold">Datos del emisor</div>
+      <div className="mb-6 text-[13px] text-muted">
+        Se imprimen en la cabecera de cada factura.
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <Label>RAZÓN SOCIAL</Label>
+          <input
+            className={inputCls}
+            value={f.empresa}
+            onChange={(e) => set("empresa", e.target.value)}
+          />
         </div>
-        <p className="mb-lg font-body-sm text-body-sm text-secondary">
-          Estos datos aparecen en la cabecera de la factura.
-        </p>
-        <div className="space-y-md">
-          <div className="flex flex-col gap-xs">
-            <label className="font-label-caps text-label-caps text-secondary">NOMBRE / RAZON SOCIAL</label>
-            <input className={inputCls} value={f.empresa} onChange={(e) => set("empresa", e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-md">
-            <div className="flex flex-col gap-xs">
-              <label className="font-label-caps text-label-caps text-secondary">RUC</label>
-              <input className={inputCls} value={f.ruc} onChange={(e) => set("ruc", e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-xs">
-              <label className="font-label-caps text-label-caps text-secondary">TELEFONO</label>
-              <input className={inputCls} value={f.telefono} onChange={(e) => set("telefono", e.target.value)} />
-            </div>
-          </div>
-          <div className="flex flex-col gap-xs">
-            <label className="font-label-caps text-label-caps text-secondary">DIRECCION</label>
-            <input className={inputCls} value={f.direccion} onChange={(e) => set("direccion", e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-xs">
-            <label className="font-label-caps text-label-caps text-secondary">EMAIL</label>
-            <input className={inputCls} value={f.mail} onChange={(e) => set("mail", e.target.value)} />
-          </div>
+        <div>
+          <Label>RUC</Label>
+          <input
+            className={monoInputCls}
+            value={f.ruc}
+            onChange={(e) => set("ruc", e.target.value)}
+          />
         </div>
-        {error && <p className="mt-md font-body-sm text-body-sm text-error">{error}</p>}
-        {ok && <p className="mt-md font-body-sm text-body-sm text-primary">Datos guardados.</p>}
-        <button
-          onClick={guardar}
-          disabled={busy || !f.empresa.trim() || !f.ruc.trim()}
-          className="mt-lg h-10 w-full rounded bg-primary px-xl font-label-caps text-label-caps font-bold text-on-primary transition-colors hover:bg-primary-container disabled:opacity-50"
+        <div>
+          <Label>MONEDA LOCAL</Label>
+          <select className={selectCls} disabled>
+            <option>Guaraní (Gs)</option>
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label>DIRECCIÓN</Label>
+          <input
+            className={inputCls}
+            value={f.direccion}
+            onChange={(e) => set("direccion", e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>TELÉFONO</Label>
+          <input
+            className={monoInputCls}
+            value={f.telefono}
+            onChange={(e) => set("telefono", e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>EMAIL</Label>
+          <input
+            className={inputCls}
+            value={f.mail}
+            onChange={(e) => set("mail", e.target.value)}
+          />
+        </div>
+      </div>
+      {error && (
+        <div className="mt-4">
+          <ErrorBox>{error}</ErrorBox>
+        </div>
+      )}
+      {ok && <div className="mt-4 text-[13px] text-ok">Datos guardados.</div>}
+      <div className="mt-6 flex gap-2">
+        <Button variant="primary" onClick={guardar} disabled={busy}>
+          {busy ? "Guardando..." : "Guardar cambios"}
+        </Button>
+        <Button
+          onClick={() => {
+            setError(null);
+            setOk(false);
+            cargar();
+          }}
+          disabled={busy}
         >
-          {busy ? "GUARDANDO..." : "GUARDAR CAMBIOS"}
-        </button>
-      </section>
-    </div>
+          Descartar
+        </Button>
+      </div>
+    </Card>
   );
 }

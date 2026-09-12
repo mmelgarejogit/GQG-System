@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exec } from "@/lib/db";
+import { idValido } from "@/lib/params";
 
 // Editar cliente.
 export async function PUT(
@@ -7,10 +8,16 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const cid = Number(id);
+  const cid = idValido(id);
+  if (!cid)
+    return NextResponse.json(
+      { error: "Cliente no encontrado" },
+      { status: 404 },
+    );
   const b = await req.json().catch(() => ({}));
   const nombres = String(b.nombres || "").trim();
-  if (!nombres) return NextResponse.json({ error: "Nombre requerido" }, { status: 422 });
+  if (!nombres)
+    return NextResponse.json({ error: "Nombre requerido" }, { status: 422 });
 
   const res = await exec(
     `UPDATE CLIENTES
@@ -27,7 +34,10 @@ export async function PUT(
     ],
   );
   if (!res.affectedRows)
-    return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Cliente no encontrado" },
+      { status: 404 },
+    );
   return NextResponse.json({ id: cid });
 }
 
@@ -37,10 +47,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const cid = Number(id);
+  const cid = idValido(id);
+  if (!cid)
+    return NextResponse.json(
+      { error: "Cliente no encontrado" },
+      { status: 404 },
+    );
   const res = await exec("UPDATE CLIENTES SET activo=1 WHERE id=?", [cid]);
   if (!res.affectedRows)
-    return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Cliente no encontrado" },
+      { status: 404 },
+    );
   return NextResponse.json({ id: cid });
 }
 
@@ -50,9 +68,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const cid = Number(id);
+  const cid = idValido(id);
+  if (!cid)
+    return NextResponse.json(
+      { error: "Cliente no encontrado" },
+      { status: 404 },
+    );
   const res = await exec("UPDATE CLIENTES SET activo=0 WHERE id=?", [cid]);
   if (!res.affectedRows)
-    return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Cliente no encontrado" },
+      { status: 404 },
+    );
   return NextResponse.json({ id: cid });
 }

@@ -4,18 +4,18 @@ import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-inter",
 });
 const jbmono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["500"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-jbmono",
 });
 
 export const metadata: Metadata = {
-  title: "GQG System - Credito",
-  description: "Modulo de credito con vencimientos regulares e irregulares",
+  title: "GQG System - Crédito",
+  description: "Módulo de crédito con vencimientos regulares e irregulares",
 };
 
 export default function RootLayout({
@@ -23,12 +23,6 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="es" className={`${inter.variable} ${jbmono.variable}`}>
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
-          rel="stylesheet"
-        />
-      </head>
       <body>{children}</body>
     </html>
   );
