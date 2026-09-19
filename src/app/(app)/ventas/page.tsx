@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import FiltroFechas, {
+  SIN_RANGO,
+  enRango,
+  type RangoFechas,
+} from "@/components/FiltroFechas";
 import Icon from "@/components/Icon";
 import {
   Button,
@@ -23,26 +28,13 @@ type Venta = {
   serie: string;
   nrofactura: number;
   totalfactura: number;
+  anulada: number;
   cliente: string;
   tipoid: number;
   plazo: string;
 };
 
 const POR_PAGINA = 15;
-const MESES = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Setiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
-];
 
 export default function VentasPage() {
   const router = useRouter();
@@ -50,7 +42,7 @@ export default function VentasPage() {
   const [error, setError] = useState(false);
   const [q, setQ] = useState("");
   const [modalidad, setModalidad] = useState("todas");
-  const [mes, setMes] = useState("todos");
+  const [fechas, setFechas] = useState<RangoFechas>(SIN_RANGO);
   const [pagina, setPagina] = useState(1);
 
   useEffect(() => {
@@ -60,24 +52,22 @@ export default function VentasPage() {
       .catch(() => setError(true));
   }, []);
 
-  const meses = useMemo(() => {
-    const set = new Set((ventas ?? []).map((v) => v.fechafactura.slice(0, 7)));
-    return [...set].sort().reverse();
-  }, [ventas]);
-
   const filtradas = useMemo(() => {
     const qn = q.trim().toLowerCase();
     return (ventas ?? []).filter(
       (v) =>
-        (modalidad === "todas" || String(v.tipoid) === modalidad) &&
-        (mes === "todos" || v.fechafactura.startsWith(mes)) &&
+        (modalidad === "todas" ||
+          (modalidad === "anuladas"
+            ? v.anulada === 1
+            : String(v.tipoid) === modalidad)) &&
+        enRango(v.fechafactura, fechas) &&
         (!qn ||
           nroFactura(v.serie, v.nrofactura).includes(qn) ||
           v.cliente.toLowerCase().includes(qn)),
     );
-  }, [ventas, q, modalidad, mes]);
+  }, [ventas, q, modalidad, fechas]);
 
-  useEffect(() => setPagina(1), [q, modalidad, mes]);
+  useEffect(() => setPagina(1), [q, modalidad, fechas]);
 
   const paginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const visibles = filtradas.slice(
@@ -88,7 +78,7 @@ export default function VentasPage() {
   function limpiar() {
     setQ("");
     setModalidad("todas");
-    setMes("todos");
+    setFechas(SIN_RANGO);
   }
 
   if (error)
@@ -107,26 +97,16 @@ export default function VentasPage() {
           placeholder="Buscar por factura o cliente"
         />
         <select
-          className={cx(selectCls, "w-auto")}
+          className={cx(selectCls, "sm:w-auto!")}
           value={modalidad}
           onChange={(e) => setModalidad(e.target.value)}
         >
           <option value="todas">Todas las modalidades</option>
           <option value="1">Crédito</option>
           <option value="0">Contado</option>
+          <option value="anuladas">Anuladas</option>
         </select>
-        <select
-          className={cx(selectCls, "w-auto")}
-          value={mes}
-          onChange={(e) => setMes(e.target.value)}
-        >
-          <option value="todos">Todos los meses</option>
-          {meses.map((m) => (
-            <option key={m} value={m}>
-              {MESES[Number(m.slice(5, 7)) - 1]} {m.slice(0, 4)}
-            </option>
-          ))}
-        </select>
+        <FiltroFechas value={fechas} onChange={setFechas} />
         <div className="flex-1" />
         <Button variant="primary" onClick={() => router.push("/ventas/nueva")}>
           <Icon name="mas" size={16} stroke={2} color="#fff" />
@@ -178,9 +158,12 @@ export default function VentasPage() {
                       </td>
                       <td className={tdCls}>{v.cliente}</td>
                       <td className={tdCls}>
-                        <Chip tono={v.tipoid === 1 ? "credito" : "neutro"}>
-                          {v.tipoid === 1 ? "Crédito" : "Contado"}
-                        </Chip>
+                        <div className="flex gap-1">
+                          <Chip tono={v.tipoid === 1 ? "credito" : "neutro"}>
+                            {v.tipoid === 1 ? "Crédito" : "Contado"}
+                          </Chip>
+                          {v.anulada === 1 && <Chip tono="error">Anulada</Chip>}
+                        </div>
                       </td>
                       <td className={cx(tdCls, "text-muted")}>
                         {v.tipoid === 1 ? v.plazo : "—"}
@@ -189,6 +172,7 @@ export default function VentasPage() {
                         className={cx(
                           tdCls,
                           "pr-4 text-right font-mono font-medium",
+                          v.anulada === 1 && "text-subtle line-through",
                         )}
                       >
                         {gs(v.totalfactura)}

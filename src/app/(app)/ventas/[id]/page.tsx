@@ -10,6 +10,7 @@ import {
   Chip,
   ErrorBox,
   Fila,
+  Label,
   SectionLabel,
   cx,
   tdCls,
@@ -56,6 +57,10 @@ export default function DetalleVentaPage({
   const [cobrar, setCobrar] = useState<Cuota | null>(null);
   const [cobrando, setCobrando] = useState(false);
   const [errorCobro, setErrorCobro] = useState<string | null>(null);
+  const [anulando, setAnulando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [busyAnular, setBusyAnular] = useState(false);
+  const [errorAnular, setErrorAnular] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
     fetch(`/api/ventas/${id}`)
@@ -88,6 +93,23 @@ export default function DetalleVentaPage({
     }
   }
 
+  async function confirmarAnulacion() {
+    setBusyAnular(true);
+    setErrorAnular(null);
+    const r = await fetch(`/api/ventas/${id}/anular`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ motivo }),
+    });
+    const body = await r.json().catch(() => ({}));
+    setBusyAnular(false);
+    if (!r.ok)
+      return setErrorAnular(body.error || "No se pudo anular la factura.");
+    setAnulando(false);
+    setMotivo("");
+    cargar();
+  }
+
   if (error)
     return (
       <div className="flex flex-col gap-4">
@@ -115,6 +137,8 @@ export default function DetalleVentaPage({
   const cobrado = d.cuotas.reduce((s, c) => s + Number(c.cobrado), 0);
   const totalCuotas = d.cuotas.reduce((s, c) => s + Number(c.importe), 0);
   const nro = nroFactura(d.serie, d.nrofactura);
+  const anulada = d.anulada === 1;
+  const conCobros = cobrado > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -131,7 +155,34 @@ export default function DetalleVentaPage({
           <Icon name="imprimir" size={14} stroke={1.8} color="#45474C" />
           Ver factura
         </Button>
+        {!anulada && (
+          <Button
+            size="sm"
+            variant="danger-outline"
+            onClick={() => {
+              setErrorAnular(null);
+              setAnulando(true);
+            }}
+            disabled={conCobros}
+            title={
+              conCobros
+                ? "Tiene cobros registrados: no se puede anular"
+                : undefined
+            }
+          >
+            Anular
+          </Button>
+        )}
       </div>
+
+      {anulada && (
+        <ErrorBox titulo="Factura anulada">
+          Anulada el {fechaCorta(d.anulada_fecha)} a las{" "}
+          {String(d.anulada_fecha).slice(11, 16)} por {d.anulada_usuario}.
+          Motivo: {d.anulada_motivo}. Sus cuotas ya no cuentan como saldo a
+          cobrar.
+        </ErrorBox>
+      )}
 
       {errorCobro && <ErrorBox>{errorCobro}</ErrorBox>}
 
@@ -149,9 +200,12 @@ export default function DetalleVentaPage({
                 </div>
               </div>
               <div className="flex-1" />
-              <Chip tono={credito ? "credito" : "neutro"}>
-                {credito ? "Crédito" : "Contado"}
-              </Chip>
+              <div className="flex gap-1">
+                <Chip tono={credito ? "credito" : "neutro"}>
+                  {credito ? "Crédito" : "Contado"}
+                </Chip>
+                {anulada && <Chip tono="error">Anulada</Chip>}
+              </div>
             </div>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-4 p-4">
               <Dato k="FECHA" mono>
@@ -251,7 +305,7 @@ export default function DetalleVentaPage({
                 </thead>
                 <tbody>
                   {d.cuotas.map((c) => {
-                    const estado = estadoCuota(c);
+                    const estado = anulada ? null : estadoCuota(c);
                     return (
                       <tr
                         key={c.cuota}
@@ -270,10 +324,14 @@ export default function DetalleVentaPage({
                           {Number(c.cobrado) ? gs(c.cobrado) : "—"}
                         </td>
                         <td className={tdCls}>
-                          <Chip tono={tonoEstado(estado)}>{estado}</Chip>
+                          {estado ? (
+                            <Chip tono={tonoEstado(estado)}>{estado}</Chip>
+                          ) : (
+                            <Chip tono="neutro">Anulada</Chip>
+                          )}
                         </td>
                         <td className="px-4 py-2 text-right">
-                          {estado !== "Cobrada" && (
+                          {estado && estado !== "Cobrada" && (
                             <Button
                               size="sm"
                               className="h-7 text-xs"
@@ -305,10 +363,14 @@ export default function DetalleVentaPage({
                 <div
                   className={cx(
                     "font-mono text-[13px] font-semibold",
-                    totalCuotas - cobrado > 0 ? "text-error" : "text-ok",
+                    anulada
+                      ? "text-subtle"
+                      : totalCuotas - cobrado > 0
+                        ? "text-error"
+                        : "text-ok",
                   )}
                 >
-                  {gs(totalCuotas - cobrado)}
+                  {gs(anulada ? 0 : totalCuotas - cobrado)}
                 </div>
               </div>
             </div>
@@ -361,6 +423,39 @@ export default function DetalleVentaPage({
         onConfirm={confirmarCobro}
         onClose={() => setCobrar(null)}
       />
+
+      <ConfirmDialog
+        open={anulando}
+        danger
+        title={`Anular la factura ${nro}`}
+        message={`Se anulan también ${d.cuotas.length === 1 ? "la cuota generada" : `las ${d.cuotas.length} cuotas generadas`}. El número de factura no se reutiliza y la acción queda registrada en la auditoría.`}
+        confirmLabel="Anular factura"
+        busy={busyAnular}
+        confirmDisabled={motivo.trim().length < 5}
+        onConfirm={confirmarAnulacion}
+        onClose={() => {
+          setAnulando(false);
+          setMotivo("");
+        }}
+      >
+        <Label>MOTIVO</Label>
+        <textarea
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          maxLength={200}
+          rows={3}
+          placeholder="Ej.: error en el cliente o en los precios"
+          className="w-full rounded-md border border-line-strong bg-surface px-2.5 py-2 text-sm"
+        />
+        <div className="mt-1 text-xs text-subtle">
+          Mínimo 5 caracteres. {motivo.length}/200
+        </div>
+        {errorAnular && (
+          <div className="mt-2">
+            <ErrorBox>{errorAnular}</ErrorBox>
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }

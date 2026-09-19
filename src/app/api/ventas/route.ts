@@ -4,7 +4,7 @@ import { fechaValida, idValido } from "@/lib/params";
 
 export async function GET() {
   const filas = await q(
-    `SELECT v.id, v.fechafactura, v.serie, v.nrofactura, v.totalfactura,
+    `SELECT v.id, v.fechafactura, v.serie, v.nrofactura, v.totalfactura, v.anulada,
             CONCAT(c.nombres, ' ', c.apellidos) AS cliente,
             td.abreviatura AS tipo, td.tipoid, p.plazo,
             (SELECT COUNT(*) FROM CUENTAS_COBRAR cc
@@ -80,12 +80,43 @@ export async function POST(req: NextRequest) {
     );
 
   const [deposito] = depositoid
-    ? await q<{ id: number }>("SELECT id FROM DEPOSITOS WHERE id = ?", [
+    ? await q<{ activo: number }>("SELECT activo FROM DEPOSITOS WHERE id = ?", [
         depositoid,
       ])
     : [];
-  if (!deposito)
-    return NextResponse.json({ error: "Deposito invalido" }, { status: 422 });
+  if (!deposito || deposito.activo !== 1)
+    return NextResponse.json(
+      { error: "El depósito no existe o está dado de baja" },
+      { status: 422 },
+    );
+
+  const [plazo] = await q<{ activo: number }>(
+    "SELECT activo FROM PLAZOS WHERE id = ?",
+    [plazoid],
+  );
+  if (!plazo || plazo.activo !== 1)
+    return NextResponse.json(
+      { error: "El plazo no existe o está dado de baja" },
+      { status: 422 },
+    );
+
+  const [empresa] = await q<{
+    timbrado: string | null;
+    timbrado_vence: string | null;
+  }>("SELECT timbrado, timbrado_vence FROM EMPRESAS ORDER BY id LIMIT 1");
+  if (!empresa?.timbrado || !empresa.timbrado_vence)
+    return NextResponse.json(
+      { error: "Configurá el timbrado en Empresa antes de facturar" },
+      { status: 422 },
+    );
+  const venceTimbrado = String(empresa.timbrado_vence).slice(0, 10);
+  if (fechafactura > venceTimbrado)
+    return NextResponse.json(
+      {
+        error: `El timbrado ${empresa.timbrado} venció el ${venceTimbrado.split("-").reverse().join("/")}; actualizalo en Empresa`,
+      },
+      { status: 422 },
+    );
 
   const productos = await q<ProductoDb>(
     `SELECT pd.codbarra, p.iva, p.activo
@@ -137,13 +168,15 @@ export async function POST(req: NextRequest) {
         (id, fechaproceso, fechafactura, clienteid, serie, nrofactura,
          timbrado, timbrado_vence, totalexento, totalimpuesto, totalbase,
          totalfactura, depositoid, monedaid, tipodocid, plazoid)
-       VALUES (?, NOW(), ?, ?, '001-001', ?, '12557031', '2027-12-31',
+       VALUES (?, NOW(), ?, ?, '001-001', ?, ?, ?,
                ?, ?, ?, ?, ?, 1, ?, ?)`,
       [
         id,
         fechafactura,
         clienteid,
         nro,
+        empresa.timbrado,
+        venceTimbrado,
         totalexento,
         totalimpuesto,
         totalbase,

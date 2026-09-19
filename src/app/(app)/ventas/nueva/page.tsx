@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import BuscadorProducto from "@/components/BuscadorProducto";
 import Icon from "@/components/Icon";
 import {
   Button,
@@ -15,7 +17,7 @@ import {
   monoInputCls,
   selectCls,
 } from "@/components/ui";
-import { cuotaLabel, gs, hoyIso, sumarDias } from "@/lib/format";
+import { cuotaLabel, fechaCorta, gs, hoyIso, sumarDias } from "@/lib/format";
 
 type Cliente = {
   id: number;
@@ -29,8 +31,10 @@ type Plazo = {
   tipoid: number;
   cuotas: number;
   irregular: number;
+  activo: number;
   detalles: { cuota: number; dias: number }[];
 };
+type Timbrado = { timbrado: string | null; timbrado_vence: string | null };
 type Producto = {
   codbarra: string;
   producto: string;
@@ -71,6 +75,7 @@ export default function NuevaVentaPage() {
   const [plazos, setPlazos] = useState<Plazo[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [depositos, setDepositos] = useState<Deposito[]>([]);
+  const [timbrado, setTimbrado] = useState<Timbrado | null>(null);
 
   const [clienteQ, setClienteQ] = useState("");
   const [clienteId, setClienteId] = useState<number | null>(null);
@@ -89,8 +94,6 @@ export default function NuevaVentaPage() {
   const [depositoId, setDepositoId] = useState("");
   const [credito, setCredito] = useState(true);
   const [plazoId, setPlazoId] = useState("");
-  const [codigo, setCodigo] = useState("");
-  const [codigoError, setCodigoError] = useState<string | null>(null);
   const [lineas, setLineas] = useState<Linea[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -99,7 +102,12 @@ export default function NuevaVentaPage() {
   useEffect(() => {
     const json = (u: string) => fetch(u).then((r) => (r.ok ? r.json() : []));
     void json("/api/clientes").then(setClientes);
-    void json("/api/plazos").then(setPlazos);
+    void json("/api/plazos").then((ps: Plazo[]) =>
+      setPlazos(ps.filter((p) => p.activo === 1)),
+    );
+    void fetch("/api/empresa")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((e) => setTimbrado(e ?? { timbrado: null, timbrado_vence: null }));
     void json("/api/productos").then(setProductos);
     void json("/api/depositos").then((d: Deposito[]) => {
       setDepositos(d);
@@ -206,21 +214,12 @@ export default function NuevaVentaPage() {
     setNc({ nombres: "", apellidos: "", documentonro: "" });
   }
 
-  function agregar() {
-    const q = codigo.trim().toLowerCase();
-    if (!q)
-      return setCodigoError(
-        "Escribí un código de barra o el nombre del producto.",
-      );
-    const p =
-      productos.find((x) => x.codbarra.toLowerCase() === q) ??
-      productos.find((x) => x.producto.toLowerCase() === q) ??
-      productos.find((x) => x.producto.toLowerCase().includes(q));
-    if (!p)
-      return setCodigoError(
-        `No hay un producto activo que coincida con «${codigo.trim()}».`,
-      );
-    setCodigoError(null);
+  const enVenta = useMemo(
+    () => new Map(lineas.map((l) => [l.codbarra, Number(l.cantidad) || 0])),
+    [lineas],
+  );
+
+  function agregar(p: Producto) {
     setError(null);
     setLineas((ls) => {
       const i = ls.findIndex((l) => l.codbarra === p.codbarra);
@@ -241,7 +240,6 @@ export default function NuevaVentaPage() {
         },
       ];
     });
-    setCodigo("");
   }
 
   function setLinea(i: number, campo: "cantidad" | "precio", valor: string) {
@@ -295,10 +293,30 @@ export default function NuevaVentaPage() {
     setBusy(false);
   }
 
+  const timbradoFalta =
+    timbrado !== null && (!timbrado.timbrado || !timbrado.timbrado_vence);
+  const timbradoVencido =
+    !!timbrado?.timbrado_vence &&
+    fecha > String(timbrado.timbrado_vence).slice(0, 10);
+  const timbradoProblema = timbradoFalta || timbradoVencido;
+
   return (
     <div className="flex flex-col gap-4">
       {error && (
         <ErrorBox titulo="No se pudo guardar la factura">{error}</ErrorBox>
+      )}
+      {timbradoProblema && (
+        <ErrorBox
+          titulo={timbradoFalta ? "Falta el timbrado" : "Timbrado vencido"}
+        >
+          {timbradoFalta
+            ? "Cargá el número y el vencimiento del timbrado en "
+            : `El timbrado ${timbrado?.timbrado} venció el ${fechaCorta(timbrado?.timbrado_vence)}: no se puede facturar con fecha posterior. Actualizalo en `}
+          <Link href="/empresa" className="font-semibold underline">
+            Empresa
+          </Link>
+          .
+        </ErrorBox>
       )}
 
       <div className="flex flex-wrap items-start gap-6">
@@ -393,10 +411,24 @@ export default function NuevaVentaPage() {
               </div>
               <div>
                 <Label>SERIE / TIMBRADO</Label>
-                <div className="flex min-h-9 flex-wrap items-center gap-2 overflow-hidden rounded-md border border-line bg-bg px-2.5 py-2 font-mono text-[13px] text-muted">
+                <div
+                  className={cx(
+                    "flex min-h-9 flex-wrap items-center gap-2 overflow-hidden rounded-md border bg-bg px-2.5 py-2 font-mono text-[13px] text-muted",
+                    timbradoProblema ? "border-error-line" : "border-line",
+                  )}
+                  title={
+                    timbrado?.timbrado_vence
+                      ? `Vence ${fechaCorta(timbrado.timbrado_vence)}`
+                      : undefined
+                  }
+                >
                   <span>001-001</span>
                   <span className="text-outline">|</span>
-                  <span>12557031</span>
+                  <span className={cx(timbradoProblema && "text-error")}>
+                    {timbrado === null
+                      ? "…"
+                      : (timbrado.timbrado ?? "Sin timbrado")}
+                  </span>
                 </div>
               </div>
             </div>
@@ -466,50 +498,11 @@ export default function NuevaVentaPage() {
             <div className="flex flex-wrap items-center gap-3 border-b border-line p-4">
               <SectionLabel>DETALLE DE LA VENTA</SectionLabel>
               <div className="flex-1" />
-              <div className="relative min-w-40 flex-[1_1_200px] sm:max-w-[300px]">
-                <Icon
-                  name="barras"
-                  size={16}
-                  stroke={1.8}
-                  color="#9CA3AF"
-                  className="absolute top-[9px] left-2.5"
-                />
-                <input
-                  list="gqg-productos"
-                  value={codigo}
-                  onChange={(e) => {
-                    setCodigo(e.target.value);
-                    setCodigoError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      agregar();
-                    }
-                  }}
-                  placeholder="Código de barra o producto + Enter"
-                  className={cx(
-                    monoInputCls,
-                    "pl-8",
-                    codigoError && "border-error",
-                  )}
-                />
-                <datalist id="gqg-productos">
-                  {productos.map((p) => (
-                    <option key={p.codbarra} value={p.codbarra}>
-                      {p.producto}
-                    </option>
-                  ))}
-                </datalist>
-              </div>
-              <Button size="sm" onClick={agregar}>
-                Agregar ítem
-              </Button>
-              {codigoError && (
-                <div className="w-full text-right text-xs text-error">
-                  {codigoError}
-                </div>
-              )}
+              <BuscadorProducto
+                productos={productos}
+                enVenta={enVenta}
+                onElegir={agregar}
+              />
             </div>
 
             {lineas.length > 0 ? (
@@ -729,7 +722,7 @@ export default function NuevaVentaPage() {
                 variant="primary"
                 className="flex-1"
                 onClick={guardar}
-                disabled={busy}
+                disabled={busy || timbradoProblema}
               >
                 {busy ? "Guardando..." : "Guardar factura"}
               </Button>

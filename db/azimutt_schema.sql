@@ -22,6 +22,8 @@ CREATE TABLE EMPRESAS (
   mail      VARCHAR(50),
   ruc       VARCHAR(50) NOT NULL,
   monedaid  INT NOT NULL,
+  timbrado       VARCHAR(20),
+  timbrado_vence DATE,
   CONSTRAINT pk_empresa PRIMARY KEY (id),
   CONSTRAINT fkempmon FOREIGN KEY (monedaid) REFERENCES MONEDAS(id)
 );
@@ -30,6 +32,7 @@ CREATE TABLE DEPOSITOS (
   deposito  VARCHAR(200) NOT NULL,
   direccion VARCHAR(150),
   telefono  VARCHAR(15),
+  activo    SMALLINT NOT NULL DEFAULT 1,
   CONSTRAINT pkdeposito PRIMARY KEY (id)
 );
 CREATE TABLE CLIENTES (
@@ -49,6 +52,7 @@ CREATE TABLE PLAZOS (
   tipoid    INT NOT NULL,
   cuotas    INT NOT NULL,
   irregular SMALLINT NOT NULL,
+  activo    SMALLINT NOT NULL DEFAULT 1,
   CONSTRAINT pkplazo PRIMARY KEY (id)
 );
 CREATE TABLE PLAZO_DETALLES (
@@ -95,6 +99,10 @@ CREATE TABLE VENTAS (
   monedaid       INT NOT NULL,
   tipodocid      INT NOT NULL,
   plazoid        INT NOT NULL,
+  anulada         SMALLINT NOT NULL DEFAULT 0,
+  anulada_fecha   DATETIME,
+  anulada_usuario VARCHAR(50),
+  anulada_motivo  VARCHAR(200),
   CONSTRAINT pkventa PRIMARY KEY (id),
   CONSTRAINT fkvtacli     FOREIGN KEY (clienteid)  REFERENCES CLIENTES(id),
   CONSTRAINT fkvtadpto    FOREIGN KEY (depositoid) REFERENCES DEPOSITOS(id),
@@ -123,5 +131,16 @@ CREATE TABLE CUENTAS_COBRAR (
   importe DECIMAL(18,5) NOT NULL,
   cobrado DECIMAL(18,5) NOT NULL DEFAULT 0,
   vence   DATETIME NOT NULL,
+  anulada SMALLINT NOT NULL DEFAULT 0,
   CONSTRAINT pkcc PRIMARY KEY (id)
+);
+CREATE TABLE AUDITORIA (
+  id      INT NOT NULL AUTO_INCREMENT,
+  fecha   DATETIME NOT NULL,
+  usuario VARCHAR(50) NOT NULL,
+  accion  VARCHAR(30) NOT NULL,
+  tabla   VARCHAR(30) NOT NULL,
+  tablaid INT NOT NULL,
+  detalle VARCHAR(500),
+  CONSTRAINT pkauditoria PRIMARY KEY (id)
 );

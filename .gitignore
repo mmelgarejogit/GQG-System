@@ -7,3 +7,10 @@ dist
 # husky
 .husky/_
 next-env.d.ts
+
+# playwright
+test-results
+playwright-report
+e2e/.auth
+e2e/.estado.json
+tsconfig.tsbuildinfo

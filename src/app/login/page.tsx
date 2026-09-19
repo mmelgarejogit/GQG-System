@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import { Label, inputCls } from "@/components/ui";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +22,7 @@ export default function LoginPage() {
       body: JSON.stringify({ usuario, password }),
     });
     if (r.ok) {
-      router.replace("/");
-      router.refresh();
+      window.location.replace("/");
     } else {
       setError(
         r.status === 401

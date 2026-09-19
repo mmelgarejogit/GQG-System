@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import Icon from "@/components/Icon";
 import { Button, cx } from "@/components/ui";
 
@@ -12,6 +12,8 @@ type Props = {
   cancelLabel?: string;
   danger?: boolean;
   busy?: boolean;
+  confirmDisabled?: boolean;
+  children?: ReactNode;
   onConfirm: () => void;
   onClose: () => void;
 };
@@ -24,6 +26,8 @@ export default function ConfirmDialog({
   cancelLabel = "Cancelar",
   danger = false,
   busy = false,
+  confirmDisabled = false,
+  children,
   onConfirm,
   onClose,
 }: Props) {
@@ -70,6 +74,7 @@ export default function ConfirmDialog({
             )}
           </div>
         </div>
+        {children && <div className="mb-4">{children}</div>}
         <div className="flex justify-end gap-2">
           <Button onClick={onClose} disabled={busy}>
             {cancelLabel}
@@ -77,7 +82,7 @@ export default function ConfirmDialog({
           <Button
             variant={danger ? "danger" : "primary"}
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
           >
             {busy ? "..." : confirmLabel}
           </Button>

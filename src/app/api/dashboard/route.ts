@@ -3,31 +3,35 @@ import { q } from "@/lib/db";
 
 type Kpi = { monto: number; cantidad: number };
 
+const CUOTAS_ABIERTAS =
+  "tabla = 'VENTAS' AND anulada = 0 AND cobrado < importe";
+
 export async function GET() {
   const [facturado] = await q<Kpi>(
     `SELECT IFNULL(SUM(totalfactura),0) AS monto, COUNT(*) AS cantidad
      FROM VENTAS
-     WHERE fechafactura >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+     WHERE anulada = 0
+       AND fechafactura >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
        AND fechafactura < DATE_FORMAT(CURDATE() + INTERVAL 1 MONTH, '%Y-%m-01')`,
   );
   const [abiertas] = await q<Kpi>(
     `SELECT IFNULL(SUM(importe - cobrado),0) AS monto, COUNT(*) AS cantidad
-     FROM CUENTAS_COBRAR WHERE tabla = 'VENTAS' AND cobrado < importe`,
+     FROM CUENTAS_COBRAR WHERE ${CUOTAS_ABIERTAS}`,
   );
   const [porVencer] = await q<Kpi>(
     `SELECT IFNULL(SUM(importe - cobrado),0) AS monto, COUNT(*) AS cantidad
      FROM CUENTAS_COBRAR
-     WHERE tabla = 'VENTAS' AND cobrado < importe
+     WHERE ${CUOTAS_ABIERTAS}
        AND DATE(vence) BETWEEN CURDATE() AND CURDATE() + INTERVAL 7 DAY`,
   );
   const [vencidas] = await q<Kpi>(
     `SELECT IFNULL(SUM(importe - cobrado),0) AS monto, COUNT(*) AS cantidad
      FROM CUENTAS_COBRAR
-     WHERE tabla = 'VENTAS' AND cobrado < importe AND DATE(vence) < CURDATE()`,
+     WHERE ${CUOTAS_ABIERTAS} AND DATE(vence) < CURDATE()`,
   );
 
   const recientes = await q(
-    `SELECT v.id, v.serie, v.nrofactura, v.totalfactura, td.tipoid,
+    `SELECT v.id, v.serie, v.nrofactura, v.totalfactura, v.anulada, td.tipoid,
             CONCAT(c.nombres, ' ', c.apellidos) AS cliente
      FROM VENTAS v
      JOIN CLIENTES c ON c.id = v.clienteid
@@ -43,7 +47,7 @@ export async function GET() {
      FROM CUENTAS_COBRAR cc
      JOIN VENTAS v ON v.id = cc.tablaid
      JOIN CLIENTES c ON c.id = v.clienteid
-     WHERE cc.tabla = 'VENTAS' AND cc.cobrado < cc.importe
+     WHERE cc.tabla = 'VENTAS' AND cc.anulada = 0 AND cc.cobrado < cc.importe
      ORDER BY cc.vence, cc.id LIMIT 6`,
   );
 

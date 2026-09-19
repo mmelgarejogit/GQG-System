@@ -70,8 +70,18 @@ export default function FacturaPage({
       <div className="w-full overflow-x-auto">
         <div
           data-a4
-          className="mx-auto w-[794px] border border-line bg-white p-10 text-xs text-ink"
+          className="relative mx-auto w-[794px] border border-line bg-white p-10 text-xs text-ink"
         >
+          {d.anulada === 1 && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 grid place-items-center overflow-hidden"
+            >
+              <div className="-rotate-[30deg] rounded-md border-4 border-error px-8 py-2 text-[88px] font-bold tracking-[0.1em] text-error opacity-20">
+                ANULADA
+              </div>
+            </div>
+          )}
           <div className="flex gap-6 border-b border-ink pb-4">
             <div className="flex-1">
               <div className="text-base font-bold tracking-[-0.01em] uppercase">
@@ -260,6 +270,12 @@ export default function FacturaPage({
               RECIBÍ CONFORME
             </div>
           </div>
+          {d.anulada === 1 && (
+            <div className="mt-4 text-center text-[10px] font-semibold text-error">
+              FACTURA ANULADA EL {fechaCorta(d.anulada_fecha)} — MOTIVO:{" "}
+              {d.anulada_motivo}
+            </div>
+          )}
           <div className="mt-4 text-center text-[9px] text-subtle">
             Documento no fiscal — comprobante interno de{" "}
             {emp?.empresa ?? "GQG System"}.

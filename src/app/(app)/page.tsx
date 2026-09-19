@@ -28,6 +28,7 @@ type Reciente = {
   serie: string;
   nrofactura: number;
   totalfactura: number;
+  anulada: number;
   tipoid: number;
   cliente: string;
 };
@@ -234,14 +235,19 @@ export default function InicioPage() {
                       </td>
                       <td className={tdCls}>{v.cliente}</td>
                       <td className={tdCls}>
-                        <Chip tono={v.tipoid === 1 ? "credito" : "neutro"}>
-                          {v.tipoid === 1 ? "Crédito" : "Contado"}
-                        </Chip>
+                        {v.anulada === 1 ? (
+                          <Chip tono="error">Anulada</Chip>
+                        ) : (
+                          <Chip tono={v.tipoid === 1 ? "credito" : "neutro"}>
+                            {v.tipoid === 1 ? "Crédito" : "Contado"}
+                          </Chip>
+                        )}
                       </td>
                       <td
                         className={cx(
                           tdCls,
                           "pr-4 text-right font-mono font-medium",
+                          v.anulada === 1 && "text-subtle line-through",
                         )}
                       >
                         {gs(v.totalfactura)}

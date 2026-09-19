@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Icon from "@/components/Icon";
 import { fechaCorta } from "@/lib/format";
 
@@ -27,7 +27,6 @@ function titulo(path: string): [string, string] {
 
 export default function Header({ usuario }: { usuario: string }) {
   const path = usePathname();
-  const router = useRouter();
   const [hoy, setHoy] = useState("");
   const [t, sub] = titulo(path);
 
@@ -35,8 +34,7 @@ export default function Header({ usuario }: { usuario: string }) {
 
   async function salir() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.replace("/login");
-    router.refresh();
+    window.location.replace("/login");
   }
 
   return (

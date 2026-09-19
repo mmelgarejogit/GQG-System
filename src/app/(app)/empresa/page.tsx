@@ -6,10 +6,12 @@ import {
   Card,
   ErrorBox,
   Label,
+  cx,
   inputCls,
   monoInputCls,
   selectCls,
 } from "@/components/ui";
+import { fechaCorta, hoyIso } from "@/lib/format";
 
 type Empresa = {
   id: number;
@@ -18,6 +20,8 @@ type Empresa = {
   telefono: string;
   mail: string;
   ruc: string;
+  timbrado: string;
+  timbrado_vence: string;
 };
 
 const VACIA: Empresa = {
@@ -27,6 +31,8 @@ const VACIA: Empresa = {
   telefono: "",
   mail: "",
   ruc: "",
+  timbrado: "",
+  timbrado_vence: "",
 };
 
 export default function EmpresaPage() {
@@ -38,7 +44,16 @@ export default function EmpresaPage() {
   const cargar = useCallback(() => {
     fetch("/api/empresa")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((e) => e && setF({ ...VACIA, ...e }))
+      .then(
+        (e) =>
+          e &&
+          setF({
+            ...VACIA,
+            ...e,
+            timbrado: e.timbrado ?? "",
+            timbrado_vence: e.timbrado_vence ?? "",
+          }),
+      )
       .catch(() => setError("No se pudieron cargar los datos de la empresa."));
   }, []);
 
@@ -52,6 +67,10 @@ export default function EmpresaPage() {
   async function guardar() {
     if (!f.empresa.trim()) return setError("La razón social es obligatoria.");
     if (!f.ruc.trim()) return setError("El RUC es obligatorio.");
+    if (!/^\d{8}$/.test(f.timbrado.trim()))
+      return setError("El timbrado debe tener 8 dígitos.");
+    if (!f.timbrado_vence)
+      return setError("Indicá el vencimiento del timbrado.");
     setBusy(true);
     setError(null);
     const r = await fetch("/api/empresa", {
@@ -66,6 +85,15 @@ export default function EmpresaPage() {
       setError(d.error || "No se pudo guardar.");
     }
   }
+
+  const hoy = hoyIso();
+  const vencido = !!f.timbrado_vence && f.timbrado_vence < hoy;
+  const limite = new Date();
+  limite.setDate(limite.getDate() + 30);
+  const porVencer =
+    !!f.timbrado_vence &&
+    f.timbrado_vence <=
+      `${limite.getFullYear()}-${String(limite.getMonth() + 1).padStart(2, "0")}-${String(limite.getDate()).padStart(2, "0")}`;
 
   return (
     <Card className="max-w-[720px] p-6">
@@ -120,7 +148,41 @@ export default function EmpresaPage() {
             onChange={(e) => set("mail", e.target.value)}
           />
         </div>
+        <div>
+          <Label>TIMBRADO</Label>
+          <input
+            className={monoInputCls}
+            inputMode="numeric"
+            maxLength={8}
+            placeholder="12557031"
+            value={f.timbrado}
+            onChange={(e) => set("timbrado", e.target.value.replace(/\D/g, ""))}
+          />
+        </div>
+        <div>
+          <Label>VENCIMIENTO TIMBRADO</Label>
+          <input
+            type="date"
+            className={cx(monoInputCls, vencido && "border-error text-error")}
+            value={f.timbrado_vence}
+            onChange={(e) => set("timbrado_vence", e.target.value)}
+          />
+        </div>
       </div>
+      {vencido && (
+        <div className="mt-4">
+          <ErrorBox titulo="Timbrado vencido">
+            No se pueden emitir facturas con fecha posterior al{" "}
+            {fechaCorta(f.timbrado_vence)}. Cargá el timbrado vigente.
+          </ErrorBox>
+        </div>
+      )}
+      {!vencido && porVencer && (
+        <div className="mt-4 rounded-md bg-warn-soft px-3.5 py-3 text-[13px] text-warn">
+          El timbrado vence el {fechaCorta(f.timbrado_vence)}: faltan menos de
+          30 días.
+        </div>
+      )}
       {error && (
         <div className="mt-4">
           <ErrorBox>{error}</ErrorBox>

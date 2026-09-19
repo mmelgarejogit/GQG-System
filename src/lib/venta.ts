@@ -20,6 +20,10 @@ export type VentaDetalle = {
   totalfactura: number;
   timbrado: string;
   timbrado_vence: string;
+  anulada: number;
+  anulada_fecha: string | null;
+  anulada_usuario: string | null;
+  anulada_motivo: string | null;
   cliente: string;
   documentonro: string;
   cliente_direccion: string;

@@ -26,6 +26,7 @@ services:
       - ./db/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
       - ./db/02_trigger.sql:/docker-entrypoint-initdb.d/02_trigger.sql:ro
       - ./db/03_pruebas.sql:/docker-entrypoint-initdb.d/03_pruebas.sql:ro
+      - ./db/04_evolucion.sql:/docker-entrypoint-initdb.d/04_evolucion.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s

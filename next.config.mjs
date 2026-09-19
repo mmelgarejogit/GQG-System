@@ -4,6 +4,7 @@ const nextConfig = {
   output: "standalone",
   // mysql2 es solo de servidor; no empaquetarlo para el cliente
   serverExternalPackages: ["mysql2"],
+  devIndicators: { position: "bottom-right" },
   // el browser pide /favicon.ico -> servir el icono SVG
   async rewrites() {
     return [{ source: "/favicon.ico", destination: "/icon.svg" }];

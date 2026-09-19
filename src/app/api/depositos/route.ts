@@ -1,25 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { q, exec } from "@/lib/db";
+import { q, db } from "@/lib/db";
+import { validarDeposito } from "@/lib/depositos";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const todos = req.nextUrl.searchParams.get("inactivos") === "1";
   const filas = await q(
-    "SELECT id, deposito, direccion, telefono FROM DEPOSITOS ORDER BY deposito",
+    `SELECT d.id, d.deposito, d.direccion, d.telefono, d.activo,
+            (SELECT COUNT(*) FROM VENTAS v WHERE v.depositoid = d.id) AS usos
+     FROM DEPOSITOS d
+     ${todos ? "" : "WHERE d.activo = 1"}
+     ORDER BY d.activo DESC, d.deposito`,
   );
   return NextResponse.json(filas);
 }
 
 export async function POST(req: NextRequest) {
-  const b = await req.json().catch(() => ({}));
-  const deposito = String(b.deposito || "").trim();
-  if (!deposito) return NextResponse.json({ error: "Nombre del deposito requerido" }, { status: 422 });
+  const v = validarDeposito(await req.json().catch(() => ({})));
+  if ("error" in v) return NextResponse.json(v, { status: 422 });
 
-  const [{ maxid }] = await q<{ maxid: number }>("SELECT IFNULL(MAX(id),0) AS maxid FROM DEPOSITOS");
-  const id = Number(maxid) + 1;
-  await exec("INSERT INTO DEPOSITOS (id, deposito, direccion, telefono) VALUES (?,?,?,?)", [
-    id,
-    deposito,
-    String(b.direccion || ""),
-    String(b.telefono || ""),
-  ]);
-  return NextResponse.json({ id }, { status: 201 });
+  const conn = await db().getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[{ maxid }]] = (await conn.query(
+      "SELECT IFNULL(MAX(id),0) AS maxid FROM DEPOSITOS FOR UPDATE",
+    )) as [{ maxid: number }[], unknown];
+    const id = Number(maxid) + 1;
+    await conn.query(
+      "INSERT INTO DEPOSITOS (id, deposito, direccion, telefono) VALUES (?,?,?,?)",
+      [id, v.deposito, v.direccion, v.telefono],
+    );
+    await conn.commit();
+    return NextResponse.json({ id }, { status: 201 });
+  } catch (e) {
+    await conn.rollback();
+    console.error(e);
+    return NextResponse.json(
+      { error: "No se pudo crear el depósito" },
+      { status: 500 },
+    );
+  } finally {
+    conn.release();
+  }
 }

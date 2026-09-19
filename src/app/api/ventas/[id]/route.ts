@@ -14,6 +14,7 @@ export async function GET(
   const [v] = await q(
     `SELECT v.id, v.fechafactura, v.serie, v.nrofactura, v.totalfactura,
             v.totalexento, v.totalimpuesto, v.timbrado, v.timbrado_vence,
+            v.anulada, v.anulada_fecha, v.anulada_usuario, v.anulada_motivo,
             v.clienteid, v.tipodocid, v.plazoid,
             CONCAT(c.nombres, ' ', c.apellidos) AS cliente, c.documentonro,
             c.direccion AS cliente_direccion, c.telefono AS cliente_telefono,
